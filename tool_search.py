@@ -71,6 +71,10 @@ DIRECTORY_SIGNALS = (
     "directory", "directories", "best ai tools", "top ai tools",
     "tool directory", "tools list", "product hunt",
 )
+EDITORIAL_SIGNALS = (
+    "news", "blog", "magazine", "journal", "press", "article", "articles",
+    "اخبار", "أخبار", "مقالات", "مدونة", "مجلة",
+)
 TRACKING_KEYS = {"fbclid", "gclid", "ref", "source"}
 
 
@@ -120,7 +124,6 @@ def canonical_tool_url(url: str) -> str | None:
         path = re.sub(r"/{2,}", "/", parsed.path or "/")
         if path != "/":
             path = path.rstrip("/")
-        # Search-result parameters are not needed to identify the product page.
         query_parts = []
         for part in parsed.query.split("&"):
             if not part:
@@ -151,7 +154,7 @@ def is_relevant_tool(
     description: str = "",
     content: str = "",
 ) -> bool:
-    """Require category evidence in product metadata or meaningful page content."""
+    """Require task relevance and product identity; reject editorial destinations."""
     category = task_category(query)
     metadata = " ".join((title, url, description))
     metadata_norm = normalize_search_text(metadata)
@@ -159,11 +162,13 @@ def is_relevant_tool(
 
     if any(signal in metadata_norm for signal in DIRECTORY_SIGNALS):
         return False
+    # Editorial sites can mention AI tools and task keywords without being tools.
+    if any(signal in metadata_norm for signal in EDITORIAL_SIGNALS):
+        return False
 
     if category:
         if _category_evidence(category, metadata):
             return True
-        # Body evidence is accepted only when metadata also identifies a product.
         has_product_identity = any(
             signal in metadata_norm for signal in PRODUCT_SIGNALS
         )
