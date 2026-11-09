@@ -53,7 +53,7 @@ def run_self_check(project_root: str | Path = ".") -> list[Check]:
         return checks
 
     command_names = {
-        node.args[0].value
+        node.args[0].args[0].value
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
