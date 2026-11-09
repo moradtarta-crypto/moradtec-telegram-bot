@@ -152,9 +152,51 @@ def _clean_search_url(raw_url: str):
     return raw_url
 
 
+def _tool_search_terms(query: str) -> str:
+    """Translate common Arabic tasks into focused product-search terms."""
+    normalized = query.lower()
+    mappings = [
+        (("فيديو", "video", "مقاطع"), "AI video generator text to video video editing"),
+        (("صور", "صورة", "image", "تصميم الصور"), "AI image generator text to image"),
+        (("شعار", "شعارات", "logo"), "AI logo maker logo generator"),
+        (("صوت", "تعليق صوتي", "تحويل النص إلى صوت", "text to speech", "tts"), "AI text to speech voice generator"),
+        (("موسيقى", "أغاني", "music", "song"), "AI music generator"),
+        (("عروض", "تقديمية", "presentation", "slides"), "AI presentation maker slide generator"),
+        (("كتابة", "مقالات", "كتابة المحتوى", "writing"), "AI writing assistant content generator"),
+        (("برمجة", "كود", "coding", "code"), "AI coding assistant code editor"),
+        (("ترجمة", "translation"), "AI translation tool"),
+    ]
+    for keywords, terms in mappings:
+        if any(keyword in normalized for keyword in keywords):
+            return terms
+    return f"AI software tool {query}"
+
+
+def _is_likely_product_page(title: str, url: str, description: str, content: str, query: str) -> bool:
+    """Reject generic AI landing pages, sign-in screens, directories, and irrelevant pages."""
+    combined = f"{title} {url} {description}".lower()
+    rejected = (
+        "sign in", "log in", "login", "how we're making ai helpful",
+        "about google ai", "ai research", "product hunt", "directory",
+        "best ai tools", "top ai tools", "pricing plans only",
+    )
+    if any(term in combined for term in rejected):
+        return False
+    product_signals = (
+        "try", "create", "generate", "generator", "studio", "app",
+        "editor", "assistant", "maker", "start creating", "get started",
+    )
+    if not any(term in combined or term in content.lower()[:3500] for term in product_signals):
+        return False
+    task_terms = _tool_search_terms(query).lower().split()
+    content_sample = f"{title} {description} {content[:5000]}".lower()
+    relevant_terms = [term for term in task_terms if len(term) > 3 and term not in {"generator", "assistant", "software"}]
+    return not relevant_terms or any(term in content_sample for term in relevant_terms)
+
+
 async def search_ai_tool_sites(query: str):
-    """Search using multiple engines, then verify candidate official product pages."""
-    search_query = f"AI tool {query} official website how to use"
+    """Search focused product terms, then verify relevant official product pages."""
+    search_query = f"{_tool_search_terms(query)} official website"
     found = []
     seen_hosts = set()
     last_error = None
@@ -165,8 +207,6 @@ async def search_ai_tool_sites(query: str):
         follow_redirects=True,
     ) as client:
         search_results = []
-
-        # Try DuckDuckGo first, then Bing RSS if the first provider is unavailable.
         try:
             response = await client.get(AI_TOOL_SEARCH_URL, params={"q": search_query})
             response.raise_for_status()
@@ -228,6 +268,8 @@ async def search_ai_tool_sites(query: str):
                     title = item.get("title") or final_host
                 if len(visible_text) < 80 and len(description) < 25:
                     continue
+                if not _is_likely_product_page(title, final_url, description, visible_text, query):
+                    continue
                 found.append({
                     "title": title[:180],
                     "url": final_url,
@@ -266,8 +308,13 @@ async def explain_ai_tool(tool: dict):
         "على محتوى الصفحة الرسمية المرفق. لا تخترع ميزات أو خطوات أو أسعاراً أو حدوداً غير موجودة. "
         "إذا لم يذكر المصدر السعر فاكتب: السعر والتفاصيل راجع الموقع الرسمي. "
         "إذا لم تكف المعلومات لتحديد خطوات الاستخدام، صرّح بذلك ولا تخمّن. "
-        "اكتب بهذا الترتيب: ما الأداة؟ ماذا تنجز؟ طريقة البدء (3 إلى 5 خطوات فقط إذا كانت مدعومة بالمصدر)، "
-        "مثال عملي بسيط، الخطة المجانية/السعر فقط إذا ورد في المصدر، وملاحظة مهمة. "
+        "اكتب شرحاً قصيراً غير مكرر، ولا تملأ الفراغ بمعلومات عامة. اذكر فقط الوظائف التي يثبتها النص. "
+        "لا تعتبر صفحة تسجيل الدخول أو صفحة تعريفية بالشركة دليلاً على وجود منتج محدد. "
+        "لا تقل إن الخدمة مجانية أو بلا حدود إلا إذا ذكر المصدر ذلك صراحة؛ وإذا لم يذكر السعر فاكتب: "
+        "لم تُذكر معلومات السعر في الصفحة التي فُحصت. لا تخترع أسماء أزرار أو أقسام أو خطوات. "
+        "تجنب تكرار الجمل أو النقاط، ولا تكرر الفكرة نفسها بصيغ مختلفة. "
+        "اكتب بهذا الترتيب: ما الأداة؟ ماذا تنجز؟ طريقة البدء (فقط إذا كانت الخطوات واضحة بالمصدر)، "
+        "مثال عملي مبني على وظيفة مؤكدة، السعر (فقط إذا ورد)، وملاحظة عند نقص المعلومات. "
         "لا تضع روابط من عندك ولا تكرر رابط الصفحة داخل الشرح.\n\n"
         + source
     )
@@ -433,7 +480,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "الأوامر المتاحة:\n"
         "/draft الموضوع - إنشاء مسودة تقنية قابلة للتعديل (لا تُنشر تلقائياً)\n"
         "/ideas - اقتراح أفكار منشورات تقنية\n"
-        "/tools المجال - البحث عن أدوات ذكاء اصطناعي وشرح استخدامها مع روابطها الرسمية\n"
         "/tools المجال - البحث عن أدوات ذكاء اصطناعي وشرح استخدامها مع روابطها الرسمية\n"
         "/post - إرسال منشور نصي أو صورة مع تعليق (نشر تلقائي)\n"
         "لإضافة زر رابط، أضف سطراً مثل: زر: افتح الموقع | https://example.com\n"
