@@ -19,7 +19,8 @@ class GroundedToolExplanationTests(unittest.TestCase):
         self.assertIn("Image to Video", explanation)
         self.assertIn("تعديل فيديو موجود", explanation)
         self.assertIn("تنبيه خصوصية", explanation)
-        self.assertIn("لم تتوفر في النص المفحوص معلومات سعرية مؤكدة", explanation)
+        self.assertIn("25 ثانية HD", explanation)
+        self.assertIn("https://deepai.org/docs", explanation)
 
     def test_does_not_invent_features_when_source_is_vague(self):
         explanation = build_grounded_explanation({
