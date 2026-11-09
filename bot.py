@@ -256,7 +256,7 @@ async def find_commons_photo(topic: str):
                     description_url = "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_")
                     artist = metadata.get("Artist", {}).get("value", "المؤلف غير مذكور")
                     artist = re.sub(r"<[^>]+>", "", html.unescape(artist))
-                    artist = re.sub(r"\\s+", " ", artist).strip()[:180]
+                    artist = re.sub(r"\s+", " ", artist).strip()[:180]
                     license_url = metadata.get("LicenseUrl", {}).get("value", "")
                     return {
                         "url": image_url,
