@@ -86,4 +86,4 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     )):
         output.append("تنبيه خصوصية: يذكر المصدر أن الملفات أو النتائج قد تُشارك علناً؛ تجنب رفع صور أو مقاطع خاصة.")
     output.append("السعر والحدود: لم تتوفر في النص المفحوص معلومات سعرية مؤكدة؛ راجع صفحة الأسعار الرسمية.")
-    return "\\n".join(output)[:1700]
+    return "\n".join(output)[:1700]
