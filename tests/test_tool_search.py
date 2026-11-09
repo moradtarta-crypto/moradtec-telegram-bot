@@ -18,19 +18,23 @@ class ToolSearchTests(unittest.TestCase):
         self.assertEqual(task_category("data analytics"), "data")
         self.assertEqual(task_category("تحويل النص إلى صوت"), "voice")
 
-    def test_rejects_unrelated_and_directory_results(self):
-        self.assertFalse(is_relevant_tool(
-            "إنشاء فيديو",
-            title="Adoptium - Java runtime",
-            url="https://adoptium.net",
-            description="Tools for Java developers",
-        ))
-        self.assertFalse(is_relevant_tool(
-            "إنشاء فيديو",
-            title="Best AI tools directory",
-            url="https://example.com",
-            description="Directory of AI tools",
-        ))
+    def test_rejects_unrelated_directory_and_editorial_results(self):
+        rejected = [
+            ("Adoptium - Java runtime", "https://adoptium.net", "Tools for Java developers"),
+            ("Best AI tools directory", "https://example.com", "Directory of AI tools"),
+            ("all-ai.de News", "https://www.all-ai.de/news/", "News about AI video generators and tools"),
+            ("AI Video Generator Blog", "https://blog.example.com", "Articles about text to video"),
+            ("أخبار الذكاء الاصطناعي", "https://example.com/اخبار", "مقالات عن إنشاء الفيديو"),
+        ]
+        for title, url, description in rejected:
+            with self.subTest(title=title):
+                self.assertFalse(is_relevant_tool(
+                    "إنشاء فيديو",
+                    title=title,
+                    url=url,
+                    description=description,
+                    content="AI video generator and text to video platform",
+                ))
 
     def test_accepts_matching_product_metadata(self):
         self.assertTrue(is_relevant_tool(
