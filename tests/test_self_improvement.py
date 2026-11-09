@@ -26,18 +26,18 @@ class SelfImprovementTests(unittest.TestCase):
     def test_detects_registered_command_handlers_without_ast_error(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = (
-                "from telegram.ext import CommandHandler\\n"
-                "app.add_handler(CommandHandler('start', start))\\n"
-                "app.add_handler(CommandHandler('help', help_command))\\n"
-                "app.add_handler(CommandHandler('selfcheck', selfcheck_command))\\n"
-                "app.add_handler(CommandHandler('improve', improve_command))\\n"
-                "app.add_handler(CommandHandler('autodev', autodev_command))\\n"
-                "def guard(update): return is_owner(update)\\n"
-                "secret_token=WEBHOOK_SECRET\\n"
-            )
+            source = "\\n".join([
+                "from telegram.ext import CommandHandler",
+                "app.add_handler(CommandHandler('start', start))",
+                "app.add_handler(CommandHandler('help', help_command))",
+                "app.add_handler(CommandHandler('selfcheck', selfcheck_command))",
+                "app.add_handler(CommandHandler('improve', improve_command))",
+                "app.add_handler(CommandHandler('autodev', autodev_command))",
+                "def guard(update): return is_owner(update)",
+                "secret_token=WEBHOOK_SECRET",
+            ])
             (root / "bot.py").write_text(source, encoding="utf-8")
-            (root / "requirements.txt").write_text("httpx\\n", encoding="utf-8")
+            (root / "requirements.txt").write_text("httpx", encoding="utf-8")
             with mock.patch.dict("os.environ", {
                 "BOT_TOKEN": "configured",
                 "OWNER_ID": "123",
