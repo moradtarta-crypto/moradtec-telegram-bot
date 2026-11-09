@@ -285,7 +285,7 @@ async def search_ai_tool_sites(query: str):
                     continue
                 page_parser = PageTextParser()
                 page_parser.feed(page_response.text[:1_000_000])
-                title = re.sub(r"\\s+", " ", " ".join(page_parser.title_parts)).strip()
+                title = re.sub(r"\s+", " ", " ".join(page_parser.title_parts)).strip()
                 visible_text = re.sub(r"\\s+", " ", " ".join(page_parser.text_parts)).strip()
                 description = page_parser.description
                 if not title:
@@ -363,20 +363,20 @@ async def explain_ai_tool(tool: dict):
                 return None
             # Remove repeated sentences and reject obvious generation glitches.
             raw = re.sub(r"\\s+", " ", text).strip()
-            sentences = re.split(r"(?<=[.!؟])\\s+", raw)
+            sentences = re.split(r"(?<=[.!؟])\s+", raw)
             unique = []
             seen = set()
             for sentence in sentences:
                 sentence = sentence.strip()
-                key = re.sub(r"[^\\w]+", "", sentence.lower())
+                key = re.sub(r"[^\w]+", "", sentence.lower())
                 if sentence and key and key not in seen:
                     seen.add(key)
                     unique.append(sentence)
             cleaned = " ".join(unique).strip()
-            if len(cleaned) < 70 or re.search(r"[\\u0600-\\u06ff]\\s+[A-Za-z]{2,}\\s+[\\u0600-\\u06ff]", cleaned):
+            if len(cleaned) < 70 or re.search(r"[\u0600-\u06ff]\s+[A-Za-z]{2,}\s+[\u0600-\u06ff]", cleaned):
                 return None
             # Never repeat a pricing claim unless the inspected page itself contains it.
-            pricing_claim = re.search(r"(\\$\\s?\\d|\\d+(?:\\.\\d+)?\\s?(?:دولار|يورو)|مجاني(?:ة)?|بلا حدود|غير محدود)", cleaned, re.I)
+            pricing_claim = re.search(r"(\$\s?\d|\d+(?:\.\d+)?\s?(?:دولار|يورو)|مجاني(?:ة)?|بلا حدود|غير محدود)", cleaned, re.I)
             source_text = (tool.get("title", "") + " " + tool.get("description", "") + " " + tool.get("content", "")).lower()
             if pricing_claim and not any(token in source_text for token in ("pricing", "price", "free", "مجاني", "دولار", "unlimited")):
                 return None
