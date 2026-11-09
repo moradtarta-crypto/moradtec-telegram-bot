@@ -54,11 +54,27 @@ class SelfImprovementTests(unittest.TestCase):
         self.assertIn("جميع الفحوصات اجتازت الاختبار", result)
         self.assertNotIn("الملكية الخاصة بالملك", result)
 
+    def test_all_green_checks_reject_hallucinated_ai_failures(self):
+        checks = [
+            Check("owner_tools_registered", True, "Self-improvement commands are registered."),
+            Check("secret_hygiene", True, "No obvious hard-coded API token assignment was found."),
+        ]
+        hallucinated = (
+            "النتائج الناجحة: لا توجد مشكلة. النتائج الفاشلة: "
+            "'owner_tools_registered' يحتاج إلى إجراء إصلاح. "
+            "'secret_hygiene' يحتاج إلى إجراء إصلاح. "
+            "اقتراح: افحص إجراءات الإصلاح."
+        )
+        result = _clean_ai_report(hallucinated, checks)
+        self.assertIn("لم تُسجل هذه الجولة مشكلة مؤكدة", result)
+        self.assertNotIn("النتائج الفاشلة", result)
+        self.assertNotIn("إجراء إصلاح", result)
+
     def test_clean_ai_report_removes_duplicate_sentences(self):
-        checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
-        answer = "النتائج كلها جيدة وواضحة. يجب متابعة السجلات بعد النشر. النتائج كلها جيدة وواضحة."
+        checks = [Check("python_syntax", False, "SyntaxError", "critical")]
+        answer = "تعذر تحليل الملف بسبب SyntaxError. يجب إصلاح صياغة الملف وإعادة الفحص. تعذر تحليل الملف بسبب SyntaxError."
         result = _clean_ai_report(answer, checks)
-        self.assertEqual(result.count("النتائج كلها جيدة وواضحة"), 1)
+        self.assertEqual(result.count("تعذر تحليل الملف بسبب SyntaxError"), 1)
         self.assertLessEqual(len(result), 1100)
 
     def test_fallback_report_does_not_overclaim(self):
