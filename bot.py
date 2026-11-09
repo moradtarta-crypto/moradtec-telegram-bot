@@ -435,7 +435,9 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"{explanation}\n\n"
             f"🌐 رابط الأداة: {destination_url}"
             f"{link_note}\n"
-            "ℹ️ راجع الموقع الرسمي للتأكد من الأسعار والتوفر؛ فقد تتغير الخطط والميزات."
+            f"🔗 الرابط الرسمي المباشر: {tool['url']}\n"
+            "ℹ️ يمكنك استخدام الرابط المباشر للتحقق من الوجهة؛ الرابط المختصر يمر عبر صفحة إعلانية. "
+            "راجع الموقع الرسمي للتأكد من الأسعار والتوفر؛ فقد تتغير الخطط والميزات."
         )
         keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🌐 افتح الأداة", url=destination_url)]]
