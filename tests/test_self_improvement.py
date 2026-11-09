@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -37,7 +38,7 @@ class SelfImprovementTests(unittest.TestCase):
             )
             (root / "bot.py").write_text(source, encoding="utf-8")
             (root / "requirements.txt").write_text("httpx\\n", encoding="utf-8")
-            with unittest.mock.patch.dict("os.environ", {
+            with mock.patch.dict("os.environ", {
                 "BOT_TOKEN": "configured",
                 "OWNER_ID": "123",
                 "CHANNEL_ID": "@example",
