@@ -23,9 +23,8 @@ OWNER_ID_RAW = os.getenv("OWNER_ID", "").strip()
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@MoradTecAI")
 OWNER_ID = int(OWNER_ID_RAW) if OWNER_ID_RAW.isdigit() else None
 MAX_POST_LENGTH = 3500
+MAX_CAPTION_LENGTH = 1024
 
-# Derive Telegram's webhook secret and an unguessable URL path without
-# introducing another secret that the owner must configure.
 WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
 WEBHOOK_PATH = hashlib.sha256((BOT_TOKEN + ":path").encode("utf-8")).hexdigest()
 
@@ -39,8 +38,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحباً بك في مساعد MoradTec 🤖\n\n"
         "أرسل /id لمعرفة رقم حسابك Telegram.\n"
-        "بعد ضبط OWNER_ID في إعدادات الاستضافة، يمكنك استخدام /post "
-        "لإعداد منشور ومعاينته قبل نشره."
+        "استخدم /post لإعداد منشور نصي أو صورة مع تعليق، "
+        "ولن يُنشر شيء قبل موافقتك."
     )
 
 
@@ -56,7 +55,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     await update.message.reply_text(
         "الأوامر المتاحة:\n"
-        "/post - إعداد منشور جديد ومعاينته\n"
+        "/post - إعداد منشور نصي أو صورة مع تعليق ومعاينته\n"
         "/cancel - إلغاء إعداد المنشور\n"
         "/id - عرض معرّف حسابك"
     )
@@ -67,8 +66,12 @@ async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("عذراً، هذا البوت مخصص لمالكه فقط.")
         return
     context.user_data["waiting_for_post"] = True
+    context.user_data.pop("waiting_for_caption", None)
+    context.user_data.pop("draft_photo_id", None)
+    context.user_data.pop("pending_post", None)
     await update.message.reply_text(
-        "أرسل الآن نص المنشور الذي تريد معاينته. لن يُنشر شيء قبل ضغطك على زر الموافقة."
+        "أرسل نص المنشور، أو أرسل صورة مع تعليقها. "
+        "لن يُنشر شيء قبل ضغطك على زر الموافقة."
     )
 
 
@@ -76,39 +79,90 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not is_owner(update):
         await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
         return
-    context.user_data.pop("waiting_for_post", None)
-    context.user_data.pop("pending_post", None)
+    for key in ("waiting_for_post", "waiting_for_caption", "draft_photo_id", "pending_post"):
+        context.user_data.pop(key, None)
     await update.message.reply_text("تم إلغاء المنشور قيد الإعداد.")
 
 
-async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_owner(update) or not context.user_data.get("waiting_for_post"):
-        return
-    message = update.effective_message
-    if not message or not message.text:
-        return
-    content = message.text.strip()
-    if not content:
-        await message.reply_text("النص فارغ. أرسل نص المنشور من فضلك.")
-        return
-    if len(content) > MAX_POST_LENGTH:
-        await message.reply_text(
-            f"الحد الأقصى في النسخة الحالية {MAX_POST_LENGTH} حرفاً. اختصر النص ثم أعد إرساله."
-        )
-        return
-
+async def show_preview(message, context: ContextTypes.DEFAULT_TYPE, draft: dict) -> None:
     context.user_data["waiting_for_post"] = False
-    context.user_data["pending_post"] = content
+    context.user_data["waiting_for_caption"] = False
+    context.user_data["pending_post"] = draft
     keyboard = InlineKeyboardMarkup(
         [[
             InlineKeyboardButton("✅ موافقة ونشر", callback_data="publish"),
             InlineKeyboardButton("❌ رفض", callback_data="reject"),
         ]]
     )
-    await message.reply_text(
-        "👀 معاينة المنشور — لم يتم النشر بعد:\n\n" + content,
-        reply_markup=keyboard,
-    )
+    if draft.get("photo_id"):
+        caption = "👀 معاينة المنشور — لم يتم النشر بعد:\n\n" + (draft.get("text") or "")
+        await message.reply_photo(
+            photo=draft["photo_id"],
+            caption=caption,
+            reply_markup=keyboard,
+        )
+    else:
+        await message.reply_text(
+            "👀 معاينة المنشور — لم يتم النشر بعد:\n\n" + draft["text"],
+            reply_markup=keyboard,
+        )
+
+
+async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_owner(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+
+    if context.user_data.get("waiting_for_caption"):
+        if not message.text:
+            await message.reply_text("أرسل تعليق الصورة كنص من فضلك.")
+            return
+        caption = message.text.strip()
+        if len(caption) > MAX_CAPTION_LENGTH:
+            await message.reply_text(
+                f"تعليق الصورة يجب ألا يتجاوز {MAX_CAPTION_LENGTH} حرفاً. أعد إرساله بشكل أقصر."
+            )
+            return
+        photo_id = context.user_data.pop("draft_photo_id", None)
+        if not photo_id:
+            context.user_data["waiting_for_caption"] = False
+            await message.reply_text("انتهت جلسة إعداد الصورة. أرسل /post للبدء من جديد.")
+            return
+        await show_preview(message, context, {"photo_id": photo_id, "text": caption})
+        return
+
+    if not context.user_data.get("waiting_for_post"):
+        return
+
+    if message.photo:
+        photo_id = message.photo[-1].file_id
+        caption = (message.caption or "").strip()
+        if len(caption) > MAX_CAPTION_LENGTH:
+            await message.reply_text(
+                f"تعليق الصورة يجب ألا يتجاوز {MAX_CAPTION_LENGTH} حرفاً."
+            )
+            return
+        if not caption:
+            context.user_data["waiting_for_caption"] = True
+            context.user_data["draft_photo_id"] = photo_id
+            await message.reply_text("وصلت الصورة. أرسل الآن النص أو التعليق الذي تريد إرفاقه بها.")
+            return
+        await show_preview(message, context, {"photo_id": photo_id, "text": caption})
+        return
+
+    if message.text:
+        content = message.text.strip()
+        if not content:
+            await message.reply_text("النص فارغ. أرسل نص المنشور من فضلك.")
+            return
+        if len(content) > MAX_POST_LENGTH:
+            await message.reply_text(
+                f"الحد الأقصى للمنشور النصي {MAX_POST_LENGTH} حرفاً. اختصر النص ثم أعد إرساله."
+            )
+            return
+        await show_preview(message, context, {"text": content})
 
 
 async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -123,7 +177,7 @@ async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if query.data == "reject":
         context.user_data.pop("pending_post", None)
         await query.answer("تم رفض المنشور.")
-        await query.edit_message_text("❌ تم رفض المنشور ولم يُنشر.")
+        await query.edit_message_caption("❌ تم رفض المنشور ولم يُنشر.") if query.message and query.message.photo else await query.edit_message_text("❌ تم رفض المنشور ولم يُنشر.")
         return
 
     if query.data == "publish":
@@ -131,11 +185,18 @@ async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.answer("لا يوجد منشور معلّق.", show_alert=True)
             return
         try:
-            await context.bot.send_message(
-                chat_id=CHANNEL_ID,
-                text=pending,
-                disable_web_page_preview=False,
-            )
+            if pending.get("photo_id"):
+                await context.bot.send_photo(
+                    chat_id=CHANNEL_ID,
+                    photo=pending["photo_id"],
+                    caption=pending.get("text") or None,
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=pending["text"],
+                    disable_web_page_preview=False,
+                )
         except Exception:
             logger.exception("Failed to publish to channel")
             await query.answer("تعذر النشر. تحقق من صلاحيات البوت في القناة.", show_alert=True)
@@ -143,7 +204,10 @@ async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         context.user_data.pop("pending_post", None)
         await query.answer("تم النشر.")
-        await query.edit_message_text("✅ تم نشر المنشور في قناة MoradTec.")
+        if query.message and query.message.photo:
+            await query.edit_message_caption("✅ تم نشر الصورة والمنشور في قناة MoradTec.")
+        else:
+            await query.edit_message_text("✅ تم نشر المنشور في قناة MoradTec.")
 
 
 def main() -> None:
@@ -160,7 +224,9 @@ def main() -> None:
     app.add_handler(CommandHandler("post", post_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(review_callback, pattern="^(publish|reject)$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_post))
+    app.add_handler(
+        MessageHandler((filters.PHOTO | filters.TEXT) & ~filters.COMMAND, receive_post)
+    )
 
     webhook_url = f"{external_url}/{WEBHOOK_PATH}"
     logger.info("Starting MoradTec bot webhook on port %s", port)
