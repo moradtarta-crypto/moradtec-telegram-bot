@@ -142,7 +142,13 @@ def _fallback_ai_report(checks: Iterable[Check], goal: str = "") -> str:
 
 
 def _clean_ai_report(answer: str, checks: Iterable[Check], goal: str = "") -> str:
-    """Remove repeated/garbled model output and enforce a short report."""
+    """Remove repeated/garbled model output and reject claims unsupported by checks."""
+    items = list(checks)
+    # A green diagnostic run is deterministic evidence: do not let an LLM
+    # invent failures, repair actions, or unrelated recommendations.
+    if not any(not item.ok for item in items):
+        return _fallback_ai_report(items, goal)
+    checks = items
     if not isinstance(answer, str):
         return _fallback_ai_report(checks, goal)
     raw = answer.strip()
@@ -180,6 +186,11 @@ async def create_ai_improvement_plan(
     api_token: str | None = None,
 ) -> str | None:
     """Ask Workers AI for a concise plan based on diagnostics, not code execution."""
+    checks = list(checks)
+    # No model call is needed when every deterministic check passed.
+    if not any(not check.ok for check in checks):
+        return _fallback_ai_report(checks, goal)
+
     account_id = (account_id or os.getenv("CLOUDFLARE_ACCOUNT_ID", "")).strip()
     api_token = (api_token or os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if not account_id or not api_token:
