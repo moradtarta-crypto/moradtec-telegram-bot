@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 
@@ -22,6 +23,11 @@ OWNER_ID_RAW = os.getenv("OWNER_ID", "").strip()
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@MoradTecAI")
 OWNER_ID = int(OWNER_ID_RAW) if OWNER_ID_RAW.isdigit() else None
 MAX_POST_LENGTH = 3500
+
+# Derive Telegram's webhook secret and an unguessable URL path without
+# introducing another secret that the owner must configure.
+WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
+WEBHOOK_PATH = hashlib.sha256((BOT_TOKEN + ":path").encode("utf-8")).hexdigest()
 
 
 def is_owner(update: Update) -> bool:
@@ -143,6 +149,10 @@ async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 def main() -> None:
     if OWNER_ID is None:
         logger.warning("OWNER_ID is not configured. Set it in the hosting environment.")
+
+    external_url = os.environ["RENDER_EXTERNAL_URL"].rstrip("/")
+    port = int(os.environ.get("PORT", "10000"))
+
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("id", show_id))
@@ -151,8 +161,17 @@ def main() -> None:
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(review_callback, pattern="^(publish|reject)$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_post))
-    logger.info("MoradTec bot is starting")
-    app.run_polling(drop_pending_updates=True)
+
+    webhook_url = f"{external_url}/{WEBHOOK_PATH}"
+    logger.info("Starting MoradTec bot webhook on port %s", port)
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=WEBHOOK_PATH,
+        webhook_url=webhook_url,
+        secret_token=WEBHOOK_SECRET,
+        drop_pending_updates=True,
+    )
 
 
 if __name__ == "__main__":
