@@ -349,7 +349,8 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if generated_photo:
         try:
             image_file = BytesIO(generated_photo["bytes"])
-            image_file.name = "moradtec-ai-image.jpg"
+            extension = "png" if generated_photo["content_type"] == "image/png" else "jpg"
+            image_file.name = f"moradtec-ai-image.{extension}"
             await update.message.reply_photo(
                 photo=image_file,
                 caption="🎨 صورة مولّدة بالذكاء الاصطناعي خصيصاً لهذا الموضوع عبر Pollinations.ai.",
