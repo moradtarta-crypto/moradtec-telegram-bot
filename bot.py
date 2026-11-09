@@ -230,10 +230,16 @@ async def find_commons_photo(topic: str):
             metadata = info.get("extmetadata", {})
             license_name = metadata.get("LicenseShortName", {}).get("value", "ترخيص غير محدد")
             description_url = "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_")
+            artist = metadata.get("Artist", {}).get("value", "المؤلف غير مذكور")
+            artist = re.sub(r"<[^>]+>", "", html.unescape(artist))
+            artist = re.sub(r"\s+", " ", artist).strip()[:180]
+            license_url = metadata.get("LicenseUrl", {}).get("value", "")
             return {
                 "url": image_url,
                 "page": description_url,
                 "license": re.sub(r"<[^>]+>", "", html.unescape(license_name))[:100],
+                "license_url": license_url,
+                "artist": artist,
                 "title": title,
             }
     except Exception:
@@ -266,7 +272,7 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await update.message.reply_photo(
                 photo=photo["url"],
-                caption=f"📷 صورة فوتوغرافية مقترحة للموضوع\nالمصدر: Wikimedia Commons\nالترخيص: {photo['license']}",
+                caption=f"📷 صورة مقترحة\nالمصدر: Wikimedia Commons\nالمؤلف: {photo['artist']}\nالترخيص: {photo['license']}",
             )
             await update.message.reply_text(f"🔗 صفحة الصورة ومصدرها:\n{photo['page']}")
         except Exception:
