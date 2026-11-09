@@ -17,7 +17,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from self_improvement import create_ai_improvement_plan, run_self_check
 from self_developer import create_code_proposal
 from tool_search import canonical_tool_url, deduplicate_tool_results, is_relevant_tool
-from tool_explainer import build_grounded_explanation
+from tool_explainer import build_grounded_explanation, hide_direct_links
 from shrtfly import shorten_with_shrtfly
 
 from telegram.ext import (
@@ -443,9 +443,10 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 f"🌐 الموقع الرسمي للأداة: {tool['url']}\n\n"
                 "ℹ️ لم يتوفر رابط مختصر حالياً؛ هذا هو الرابط المباشر."
             )
+        display_explanation = hide_direct_links(explanation) if shortened_url else explanation
         message_text = (
             f"🧰 الأداة {index}: {tool['title']}\n\n"
-            f"{explanation}\n\n"
+            f"{display_explanation}\n\n"
             f"{link_section}\n"
             "راجع موقع الأداة لمعرفة الأسعار والتوفر الحاليين."
         )
