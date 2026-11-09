@@ -55,11 +55,24 @@ class SelfImprovementTests(unittest.TestCase):
         self.assertNotIn("الملكية الخاصة بالملك", result)
 
     def test_clean_ai_report_removes_duplicate_sentences(self):
-        checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
-        answer = "النتائج كلها جيدة وواضحة. يجب متابعة السجلات بعد النشر. النتائج كلها جيدة وواضحة."
+        checks = [Check("python_syntax", False, "SyntaxError detected.", "critical")]
+        answer = "تعذر تحليل الملف بسبب خطأ نحوي واضح. يجب إصلاح الخطأ ثم إعادة الفحص. تعذر تحليل الملف بسبب خطأ نحوي واضح."
         result = _clean_ai_report(answer, checks)
-        self.assertEqual(result.count("النتائج كلها جيدة وواضحة"), 1)
+        self.assertEqual(result.count("تعذر تحليل الملف بسبب خطأ نحوي واضح"), 1)
         self.assertLessEqual(len(result), 1100)
+
+    def test_all_pass_rejects_ai_claims_of_missing_repairs(self):
+        checks = [
+            Check("owner_tools_registered", True, "Self-improvement commands are registered."),
+            Check("secret_hygiene", True, "No obvious hard-coded API token assignment was found."),
+        ]
+        misleading = (
+            "النتائج الناجحة جيدة. النتائج الفاشلة: owner_tools_registered لا يوجد إجراء إصلاح. "
+            "secret_hygiene لا يوجد إجراء إصلاح."
+        )
+        result = _clean_ai_report(misleading, checks)
+        self.assertIn("جميع الفحوصات اجتازت الاختبار", result)
+        self.assertNotIn("لا يوجد إجراء إصلاح", result)
 
     def test_fallback_report_does_not_overclaim(self):
         checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
