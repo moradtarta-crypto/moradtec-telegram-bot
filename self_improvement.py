@@ -166,10 +166,10 @@ def _clean_ai_report(answer: str, checks: Iterable[Check], goal: str = "") -> st
         seen.add(normalized)
         unique.append(part)
     if not unique:
-        return _fallback_ai_report(checks, goal)
+        return _fallback_ai_report(items, goal)
     # Repeated phrases or excessively long model responses are a quality failure.
     if len(unique) < 2 or len(unique) / max(1, len(parts)) < 0.55:
-        return _fallback_ai_report(checks, goal)
+        return _fallback_ai_report(items, goal)
     cleaned = " ".join(unique[:5])
     if len(cleaned) > 1100:
         cleaned = cleaned[:1097].rsplit(" ", 1)[0] + "..."
