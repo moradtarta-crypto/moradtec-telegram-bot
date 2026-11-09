@@ -30,7 +30,8 @@ class GroundedToolExplanationTests(unittest.TestCase):
         cleaned = hide_direct_links(explanation)
         self.assertNotIn("https://", cleaned)
         self.assertNotIn("المراجع الرسمية:", cleaned)
-        self.assertIn("طريقة الاستخدام: افتح", cleaned)
+        self.assertIn("افتح الأداة من الرابط المختصر الموجود أسفل الشرح.", cleaned)
+        self.assertNotIn("افتح صفحة مولّد الفيديو الرسمية:", cleaned)
 
     def test_does_not_invent_features_when_source_is_vague(self):
         explanation = build_grounded_explanation({

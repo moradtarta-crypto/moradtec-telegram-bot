@@ -90,11 +90,18 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
 
 
 def hide_direct_links(explanation: str) -> str:
-    """Remove clickable URLs from a guide when a shortened destination is shown."""
+    """Remove direct URLs and repair link-dependent instructions when a short link is shown."""
     cleaned_lines = []
     for line in explanation.splitlines():
         cleaned = re.sub(r"https?://\S+", "", line).strip()
         cleaned = re.sub(r"\s+\|\s*$", "", cleaned).strip()
-        if cleaned and not re.fullmatch(r"(?:المراجع الرسمية|روابط رسمية|المصادر الرسمية)[:：]?", cleaned):
-            cleaned_lines.append(cleaned)
+        if not cleaned:
+            continue
+        if re.fullmatch(r"(?:المراجع الرسمية|روابط رسمية|المصادر الرسمية)[:：]?", cleaned):
+            continue
+        if re.search(r"افتح\s*$", cleaned):
+            cleaned = re.sub(r"افتح\s*$", "افتح الأداة من الرابط المختصر الموجود أسفل الشرح.", cleaned)
+        elif re.fullmatch(r"(?:\d+[.)]\s*)?افتح (?:صفحة|الموقع|الرابط).{0,100}(?:الرسمية|رسمي)[:：]?", cleaned):
+            cleaned = "افتح الأداة من الرابط المختصر الموجود أسفل الشرح."
+        cleaned_lines.append(cleaned)
     return "\n".join(cleaned_lines)
