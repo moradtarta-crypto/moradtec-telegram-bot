@@ -66,7 +66,7 @@ def run_self_check(project_root: str | Path = ".") -> list[Check]:
         and isinstance(node.args[0].args[0], ast.Constant)
         and isinstance(node.args[0].args[0].value, str)
     }
-    required_commands = {"start", "help", "selfcheck", "improve"}
+    required_commands = {"start", "help", "selfcheck", "improve", "autodev"}
     missing = sorted(required_commands - command_names)
     checks.append(Check(
         "owner_tools_registered",
