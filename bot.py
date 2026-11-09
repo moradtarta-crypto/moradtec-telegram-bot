@@ -96,6 +96,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "الأوامر المتاحة:\n"
         "/post - إعداد منشور نصي أو صورة مع تعليق ومعاينته\n"
+        "لإضافة زر رابط، أضف سطراً مثل: زر: افتح الموقع | https://example.com\n"
+        "يمكن إضافة 4 أزرار روابط HTTPS كحد أقصى.\n"
         "/cancel - إلغاء إعداد المنشور\n"
         "/id - عرض معرّف حسابك"
     )
@@ -111,6 +113,8 @@ async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     context.user_data.pop("pending_post", None)
     await update.message.reply_text(
         "أرسل نص المنشور، أو أرسل صورة مع تعليقها. "
+        "لإضافة زر رابط أضف سطراً مثل: زر: افتح الموقع | https://example.com "
+        "(حتى 4 أزرار بروابط HTTPS). "
         "لن يُنشر شيء قبل ضغطك على زر الموافقة."
     )
 
