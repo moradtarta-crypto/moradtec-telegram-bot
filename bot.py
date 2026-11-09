@@ -342,7 +342,7 @@ async def explain_ai_tool(tool: dict):
             if not isinstance(text, str) or not text.strip():
                 return None
             # Remove repeated sentences and reject obvious generation glitches.
-            raw = re.sub(r"\\s+", " ", text).strip()
+            raw = re.sub(r"\s+", " ", text).strip()
             sentences = re.split(r"(?<=[.!؟])\s+", raw)
             unique = []
             seen = set()
