@@ -17,6 +17,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from self_improvement import create_ai_improvement_plan, run_self_check
 from self_developer import create_code_proposal
 from tool_search import canonical_tool_url, deduplicate_tool_results, is_relevant_tool
+from shrtfly import shorten_with_shrtfly
 
 from telegram.ext import (
     Application,
@@ -418,14 +419,23 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 "افتح الموقع الرسمي وابحث عن قسم البدء أو Help/Getting Started؛ "
                 "لن أخمّن خطوات أو أسعاراً غير مؤكدة."
             )
+        destination_url = tool["url"]
+        shortened_url = await shorten_with_shrtfly(destination_url)
+        link_note = ""
+        if shortened_url:
+            destination_url = shortened_url
+            link_note = (
+                "\n\nℹ️ تنبيه: الرابط المختصر يمر عبر صفحة إعلانية قبل الوصول إلى الموقع الرسمي."
+            )
         message_text = (
             f"🧰 الأداة {index}: {tool['title']}\n\n"
             f"{explanation}\n\n"
-            f"🌐 الموقع الرسمي: {tool['url']}\n"
+            f"🌐 رابط الأداة: {destination_url}"
+            f"{link_note}\n"
             "ℹ️ راجع الموقع الرسمي للتأكد من الأسعار والتوفر؛ فقد تتغير الخطط والميزات."
         )
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🌐 افتح الموقع الرسمي", url=tool["url"])]]
+            [[InlineKeyboardButton("🌐 افتح الأداة", url=destination_url)]]
         )
         await update.effective_message.reply_text(
             message_text[:3900],
