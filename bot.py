@@ -1,6 +1,10 @@
 import hashlib
 import logging
 import os
+import re
+import html
+
+import httpx
 from urllib.parse import urlsplit
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -110,58 +114,131 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 
-def build_draft(topic: str) -> str:
-    """Build a richer Arabic technology post using safe, offline editorial templates."""
-    normalized = topic.lower()
-    if any(word in normalized for word in ("ذكاء", "ai", "اصطناعي", "تعلم آلي")):
-        angle = "الذكاء الاصطناعي"
-        points = [
-            "حدّد المهمة التي تريد إنجازها بوضوح، واكتب طلباً محدداً بدلاً من سؤال عام.",
-            "راجع المخرجات وقارنها بمصدر موثوق؛ فقد يقدّم النظام معلومات ناقصة أو غير دقيقة.",
-            "استخدم الأداة للمساعدة في التفكير والتعلّم، لا بديلاً عن حكمك وخبرتك.",
-        ]
-        tags = "#ذكاء_اصطناعي #AI #أدوات_رقمية"
-    elif any(word in normalized for word in ("أمن", "حماية", "اختراق", "خصوصية", "كلمة مرور", "سيبر")):
-        angle = "الأمن الرقمي"
-        points = [
-            "استخدم كلمة مرور قوية ومختلفة لكل حساب، وفعّل المصادقة الثنائية.",
-            "تحقّق من عنوان الموقع والمرسل قبل فتح الروابط أو تنزيل الملفات.",
-            "حدّث التطبيقات والنظام بانتظام، واحتفظ بنسخة احتياطية من ملفاتك المهمة.",
-        ]
-        tags = "#الأمن_السيبراني #حماية_البيانات #خصوصية"
-    elif any(word in normalized for word in ("هاتف", "تطبيق", "أندرويد", "اندرويد", "آيفون", "ايفون")):
-        angle = "الهواتف والتطبيقات"
-        points = [
-            "راجع تقييمات التطبيق واسم المطوّر قبل التثبيت.",
-            "امنح التطبيق الأذونات التي يحتاجها فعلاً فقط.",
-            "حدّث التطبيقات من المتجر الرسمي واحذف ما لم تعد تستخدمه.",
-        ]
-        tags = "#هواتف #تطبيقات #Android"
-    else:
-        angle = "التقنية"
-        points = [
-            "ابدأ بفهم المشكلة التي تعالجها التقنية قبل اختيار الأداة.",
-            "جرّب الحل على نطاق صغير، ثم قيّم فائدته وسهولة استخدامه.",
-            "قارن أكثر من مصدر ولا تعتمد على معلومة واحدة عند اتخاذ القرار.",
-        ]
-        tags = "#تقنية_حديثة #تعلم_التقنية #نصائح_تقنية"
+def clean_topic(raw_topic: str) -> str:
+    """Remove command-like suffixes that are not part of the actual topic."""
+    topic = re.sub(
+        r"\s+(?:لتجربة|لإنشاء|لانشاء|لإعداد|لاعداد|من أجل تجربة|من اجل تجربة)\s+"
+        r"(?:إعداد|اعداد|إنشاء|انشاء)?\s*مسودة.*$",
+        "",
+        raw_topic.strip(),
+        flags=re.IGNORECASE,
+    )
+    topic = re.sub(r"\s+", " ", topic).strip(" .،؛:-")
+    return topic or raw_topic.strip()
 
+
+def topic_profile(topic: str):
+    """Return a focused editorial angle, practical points, and relevant tags."""
+    normalized = topic.lower()
+    if any(word in normalized for word in ("ذكاء", "ai", "اصطناعي", "تعلم آلي", "تعلم الآلة")):
+        return (
+            "الذكاء الاصطناعي",
+            [
+                "ابدأ بهدف تعليمي واضح: تلخيص مفهوم، توليد أسئلة للمراجعة، أو تبسيط درس صعب.",
+                "اطلب من الأداة شرح الفكرة بمستوى يناسبك، ثم اطلب مثالاً وتمريناً لاختبار فهمك.",
+                "تحقق من المعلومات بالرجوع إلى الكتاب أو المعلم أو مصدر موثوق، ولا تنسَ أن الإجابة قد تخطئ.",
+            ],
+            "#ذكاء_اصطناعي #AI #التعليم #أدوات_رقمية",
+            "كيف يمكن توظيف الذكاء الاصطناعي لدعم التعلّم دون أن يحل محل جهد الطالب؟",
+        )
+    if any(word in normalized for word in ("أمن", "حماية", "اختراق", "خصوصية", "كلمة مرور", "سيبر")):
+        return (
+            "الأمن الرقمي",
+            [
+                "فعّل المصادقة الثنائية للحسابات المهمة، ويفضّل استخدام تطبيق موثوق لإدارة كلمات المرور.",
+                "افحص عنوان الرابط قبل فتحه، ولا تدخل بياناتك بعد الوصول إلى صفحة من رسالة غير متوقعة.",
+                "حدّث نظام التشغيل والتطبيقات، واحتفظ بنسخة احتياطية من الملفات المهمة.",
+            ],
+            "#الأمن_السيبراني #حماية_البيانات #خصوصية",
+            "ما الخطوة الأمنية التي تعتقد أن الجميع يجب أن يبدأ بها اليوم؟",
+        )
+    if any(word in normalized for word in ("هاتف", "تطبيق", "أندرويد", "اندرويد", "آيفون", "ايفون")):
+        return (
+            "الهواتف والتطبيقات",
+            [
+                "راجع اسم المطوّر والتقييمات وتاريخ التحديث قبل تثبيت أي تطبيق.",
+                "افتح إعدادات الخصوصية وامنع الأذونات التي لا يحتاجها التطبيق لأداء وظيفته.",
+                "احذف التطبيقات غير المستخدمة، وثبّت التحديثات من المتجر الرسمي.",
+            ],
+            "#هواتف #تطبيقات #Android #نصائح_تقنية",
+            "ما التطبيق أو الإعداد الذي أحدث فرقاً حقيقياً في تجربتك؟",
+        )
+    return (
+        "التقنية",
+        [
+            "حدّد المشكلة التي تريد حلها قبل اختيار التطبيق أو الجهاز؛ فالأداة المناسبة تبدأ من الحاجة.",
+            "اختبر الحل على مهمة صغيرة، وقارن الوقت والنتيجة قبل اعتماده في عملك اليومي.",
+            "راجع الخصوصية والتكلفة ومصدر المعلومات، ولا تعتمد على ميزة لمجرد أنها جديدة.",
+        ],
+        "#MoradTec #تقنية #تكنولوجيا #نصائح_تقنية",
+        "ما التقنية التي تتمنى أن نشرحها لكم بتجربة عملية؟",
+    )
+
+
+def build_draft(topic: str) -> str:
+    """Build a focused, natural Arabic technology post."""
+    angle, points, tags, question = topic_profile(topic)
     bullets = "\n".join(f"▪️ {point}" for point in points)
     return (
         f"🚀 {topic}\n\n"
-        f"هل تعرف كيف يمكن أن تستفيد من {angle} بطريقة عملية؟ "
-        "الفكرة ليست في استخدام كل أداة جديدة، بل في اختيار ما يحل مشكلة حقيقية ويوفر الوقت أو يرفع جودة العمل.\n\n"
-        "📌 3 نقاط تستحق الانتباه:\n"
-        f"{bullets}\n\n"
-        "🛠️ خطوة عملية للبدء:\n"
-        "اختر استخداماً واحداً مرتبطاً باهتمامك، جرّبه بنفسك، وسجّل ما نجح وما يحتاج إلى تحسين. "
-        "لا تتخذ قراراً اعتماداً على تجربة واحدة فقط.\n\n"
-        "⚠️ تذكير مهم:\n"
-        "احمِ بياناتك الشخصية، وتحقق من المعلومات من مصادر موثوقة. تختلف النتائج والميزات حسب الأداة وإصدارها، لذلك راجع التفاصيل الرسمية قبل الاعتماد عليها.\n\n"
-        "💬 نريد رأيكم:\n"
-        f"ما أكثر جانب يهمكم في موضوع «{topic}»؟ اكتبوا تجاربكم وأسئلتكم في التعليقات.\n\n"
-        f"#MoradTec #تقنية #تكنولوجيا {tags}"
+        f"لم يعد {angle} مجرد موضوع نظري؛ إذ يمكن الاستفادة منه في مواقف يومية، "
+        "بشرط فهم حدوده واختيار الاستخدام المناسب.\n\n"
+        f"📌 **كيف تبدأ؟**\n{bullets}\n\n"
+        "🛠️ **جرّب بنفسك:**\n"
+        "اختر مثالاً واحداً مرتبطاً بالموضوع، وطبّق الخطوات على نطاق بسيط. "
+        "دوّن النتيجة، ثم قارنها بما كنت تفعله سابقاً لتعرف إن كانت الأداة أو الطريقة مفيدة فعلاً.\n\n"
+        "⚠️ **قبل الاعتماد عليها:**\n"
+        "تحقق من صحة المعلومات، وانتبه إلى خصوصية بياناتك، وارجع إلى المصادر الرسمية عند الحاجة. "
+        "قد تختلف الخصائص والنتائج باختلاف الأداة وإصدارها.\n\n"
+        f"💬 **نقاش MoradTec:**\n{question}\n"
+        "شاركونا آراءكم وتجاربكم في التعليقات.\n\n"
+        f"{tags}"
     )
+
+
+async def find_commons_photo(topic: str):
+    """Find a relevant freely licensed photograph on Wikimedia Commons."""
+    api_url = "https://commons.wikimedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "generator": "search",
+        "gsrsearch": topic,
+        "gsrnamespace": 6,
+        "gsrlimit": 10,
+        "prop": "imageinfo",
+        "iiprop": "url|mime|extmetadata",
+        "iiurlwidth": 1280,
+        "format": "json",
+    }
+    headers = {"User-Agent": "MoradTecTelegramBot/1.0 (content draft image lookup)"}
+    try:
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+            response = await client.get(api_url, params=params, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+        pages = payload.get("query", {}).get("pages", {})
+        for page in pages.values():
+            info = (page.get("imageinfo") or [{}])[0]
+            mime = info.get("mime", "")
+            image_url = info.get("thumburl") or info.get("url")
+            if mime not in ("image/jpeg", "image/png") or not image_url:
+                continue
+            title = page.get("title", "")
+            # Prefer ordinary photographs; skip obvious logos, icons, diagrams and maps.
+            if re.search(r"(logo|icon|diagram|map|flag|symbol|screenshot)", title, re.I):
+                continue
+            metadata = info.get("extmetadata", {})
+            license_name = metadata.get("LicenseShortName", {}).get("value", "ترخيص غير محدد")
+            description_url = "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_")
+            return {
+                "url": image_url,
+                "page": description_url,
+                "license": re.sub(r"<[^>]+>", "", html.unescape(license_name))[:100],
+                "title": title,
+            }
+    except Exception:
+        logger.warning("Wikimedia Commons photo lookup failed")
+    return None
 
 
 async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -181,7 +258,29 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("اجعل الموضوع أقصر من 180 حرفاً ثم أعد المحاولة.")
         return
 
+    topic = clean_topic(topic)
     draft = build_draft(topic)
+    photo = await find_commons_photo(topic)
+
+    if photo:
+        try:
+            await update.message.reply_photo(
+                photo=photo["url"],
+                caption=f"📷 صورة فوتوغرافية مقترحة للموضوع\nالمصدر: Wikimedia Commons\nالترخيص: {photo['license']}",
+            )
+            await update.message.reply_text(f"🔗 صفحة الصورة ومصدرها:\n{photo['page']}")
+        except Exception:
+            logger.warning("Could not send the suggested Commons photo")
+            await update.message.reply_text(
+                "📷 لم أتمكن من إرفاق الصورة تلقائياً؛ يمكنك فتح صفحة المصدر:\n"
+                + photo["page"]
+            )
+    else:
+        await update.message.reply_text(
+            "📷 لم أعثر على صورة فوتوغرافية مناسبة لهذا الموضوع حالياً؛ "
+            "يمكنك إضافة صورة من اختيارك قبل النشر."
+        )
+
     await update.message.reply_text(
         "📝 هذه مسودة أولية قابلة للتعديل، ولم تُنشر في القناة.\n\n" + draft
     )
