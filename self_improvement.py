@@ -143,11 +143,15 @@ def _fallback_ai_report(checks: Iterable[Check], goal: str = "") -> str:
 
 def _clean_ai_report(answer: str, checks: Iterable[Check], goal: str = "") -> str:
     """Remove repeated/garbled model output and enforce a short report."""
+    items = list(checks)
+    # When every deterministic check passes, never let the model invent failures.
+    if items and all(item.ok for item in items):
+        return _fallback_ai_report(items, goal)
     if not isinstance(answer, str):
-        return _fallback_ai_report(checks, goal)
+        return _fallback_ai_report(items, goal)
     raw = answer.strip()
     if len(raw) < 40:
-        return _fallback_ai_report(checks, goal)
+        return _fallback_ai_report(items, goal)
     # Split on sentence boundaries, keeping Arabic and English punctuation.
     parts = re.split(r"(?<=[.!؟])\s+|[\r\n]+", raw)
     unique = []
@@ -162,10 +166,10 @@ def _clean_ai_report(answer: str, checks: Iterable[Check], goal: str = "") -> st
         seen.add(normalized)
         unique.append(part)
     if not unique:
-        return _fallback_ai_report(checks, goal)
+        return _fallback_ai_report(items, goal)
     # Repeated phrases or excessively long model responses are a quality failure.
     if len(unique) < 2 or len(unique) / max(1, len(parts)) < 0.55:
-        return _fallback_ai_report(checks, goal)
+        return _fallback_ai_report(items, goal)
     cleaned = " ".join(unique[:5])
     if len(cleaned) > 1100:
         cleaned = cleaned[:1097].rsplit(" ", 1)[0] + "..."
@@ -180,6 +184,11 @@ async def create_ai_improvement_plan(
     api_token: str | None = None,
 ) -> str | None:
     """Ask Workers AI for a concise plan based on diagnostics, not code execution."""
+    checks = list(checks)
+    # All-pass reports are deterministic and do not need an AI call.
+    if checks and all(check.ok for check in checks):
+        return _fallback_ai_report(checks, goal)
+
     account_id = (account_id or os.getenv("CLOUDFLARE_ACCOUNT_ID", "")).strip()
     api_token = (api_token or os.getenv("CLOUDFLARE_API_TOKEN", "")).strip()
     if not account_id or not api_token:
