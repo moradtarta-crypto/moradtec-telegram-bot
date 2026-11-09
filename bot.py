@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+from urllib.parse import urlsplit
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -24,6 +25,7 @@ CHANNEL_ID = os.getenv("CHANNEL_ID", "@MoradTecAI")
 OWNER_ID = int(OWNER_ID_RAW) if OWNER_ID_RAW.isdigit() else None
 MAX_POST_LENGTH = 3500
 MAX_CAPTION_LENGTH = 1024
+MAX_LINK_BUTTONS = 4
 
 WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
 WEBHOOK_PATH = hashlib.sha256((BOT_TOKEN + ":path").encode("utf-8")).hexdigest()
@@ -32,6 +34,44 @@ WEBHOOK_PATH = hashlib.sha256((BOT_TOKEN + ":path").encode("utf-8")).hexdigest()
 def is_owner(update: Update) -> bool:
     user = update.effective_user
     return bool(user and OWNER_ID is not None and user.id == OWNER_ID)
+
+
+def parse_post_content(content: str):
+    """Extract optional link-button directives from post text.
+
+    Format: زر: عنوان الزر | https://example.com
+    """
+    lines = content.splitlines()
+    clean_lines = []
+    buttons = []
+    for line in lines:
+        if line.strip().startswith("زر:"):
+            if len(buttons) >= MAX_LINK_BUTTONS:
+                return None, None, f"يمكن إضافة {MAX_LINK_BUTTONS} أزرار روابط كحد أقصى."
+            directive = line.strip()[len("زر:"):].strip()
+            if "|" not in directive:
+                return None, None, "صيغة زر الرابط غير صحيحة. استخدم: زر: عنوان الزر | https://example.com"
+            label, url = (part.strip() for part in directive.split("|", 1))
+            parsed = urlsplit(url)
+            if not label or len(label) > 64:
+                return None, None, "عنوان الزر مطلوب ويجب ألا يتجاوز 64 حرفاً."
+            if parsed.scheme != "https" or not parsed.netloc:
+                return None, None, "يجب أن يبدأ رابط الزر بـ https:// وأن يكون رابطاً صالحاً."
+            buttons.append({"label": label, "url": url})
+        else:
+            clean_lines.append(line)
+    text = "\\n".join(clean_lines).strip()
+    if not text:
+        return None, None, "أضف نص المنشور قبل أزرار الروابط."
+    return text, buttons, None
+
+
+def link_keyboard(buttons):
+    if not buttons:
+        return None
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(button["label"], url=button["url"])] for button in buttons]
+    )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -88,12 +128,15 @@ async def show_preview(message, context: ContextTypes.DEFAULT_TYPE, draft: dict)
     context.user_data["waiting_for_post"] = False
     context.user_data["waiting_for_caption"] = False
     context.user_data["pending_post"] = draft
-    keyboard = InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton("✅ موافقة ونشر", callback_data="publish"),
-            InlineKeyboardButton("❌ رفض", callback_data="reject"),
-        ]]
-    )
+    link_rows = [
+        [InlineKeyboardButton(button["label"], url=button["url"])]
+        for button in draft.get("buttons", [])
+    ]
+    link_rows.append([
+        InlineKeyboardButton("✅ موافقة ونشر", callback_data="publish"),
+        InlineKeyboardButton("❌ رفض", callback_data="reject"),
+    ])
+    keyboard = InlineKeyboardMarkup(link_rows)
     if draft.get("photo_id"):
         caption = "👀 معاينة المنشور — لم يتم النشر بعد:\n\n" + (draft.get("text") or "")
         await message.reply_photo(
@@ -130,7 +173,7 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             context.user_data["waiting_for_caption"] = False
             await message.reply_text("انتهت جلسة إعداد الصورة. أرسل /post للبدء من جديد.")
             return
-        await show_preview(message, context, {"photo_id": photo_id, "text": caption})
+        await show_preview(message, context, {"photo_id": photo_id, "text": caption, "buttons": buttons})
         return
 
     if not context.user_data.get("waiting_for_post"):
@@ -139,6 +182,13 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if message.photo:
         photo_id = message.photo[-1].file_id
         caption = (message.caption or "").strip()
+        if caption:
+            caption, buttons, error = parse_post_content(caption)
+            if error:
+                await message.reply_text(error)
+                return
+        else:
+            buttons = []
         if len(caption) > MAX_CAPTION_LENGTH:
             await message.reply_text(
                 f"تعليق الصورة يجب ألا يتجاوز {MAX_CAPTION_LENGTH} حرفاً."
@@ -153,7 +203,10 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     if message.text:
-        content = message.text.strip()
+        content, buttons, error = parse_post_content(message.text.strip())
+        if error:
+            await message.reply_text(error)
+            return
         if not content:
             await message.reply_text("النص فارغ. أرسل نص المنشور من فضلك.")
             return
@@ -162,7 +215,7 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 f"الحد الأقصى للمنشور النصي {MAX_POST_LENGTH} حرفاً. اختصر النص ثم أعد إرساله."
             )
             return
-        await show_preview(message, context, {"text": content})
+        await show_preview(message, context, {"text": content, "buttons": buttons})
 
 
 async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -190,12 +243,14 @@ async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     chat_id=CHANNEL_ID,
                     photo=pending["photo_id"],
                     caption=pending.get("text") or None,
+                    reply_markup=link_keyboard(pending.get("buttons", [])),
                 )
             else:
                 await context.bot.send_message(
                     chat_id=CHANNEL_ID,
                     text=pending["text"],
                     disable_web_page_preview=False,
+                    reply_markup=link_keyboard(pending.get("buttons", [])),
                 )
         except Exception:
             logger.exception("Failed to publish to channel")
