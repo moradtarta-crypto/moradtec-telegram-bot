@@ -433,14 +433,21 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             link_note = (
                 "\n\nℹ️ تنبيه: الرابط المختصر يمر عبر صفحة إعلانية قبل الوصول إلى الموقع الرسمي."
             )
+        if shortened_url:
+            link_section = (
+                f"🌐 افتح الأداة من هنا: {shortened_url}\n\n"
+                "ℹ️ تنبيه: الرابط يمر عبر صفحة إعلانية قصيرة قبل الوصول إلى موقع الأداة."
+            )
+        else:
+            link_section = (
+                f"🌐 الموقع الرسمي للأداة: {tool['url']}\n\n"
+                "ℹ️ لم يتوفر رابط مختصر حالياً؛ هذا هو الرابط المباشر."
+            )
         message_text = (
             f"🧰 الأداة {index}: {tool['title']}\n\n"
             f"{explanation}\n\n"
-            f"🌐 رابط الأداة: {destination_url}"
-            f"{link_note}\n"
-            f"🔗 الرابط الرسمي المباشر: {tool['url']}\n"
-            "ℹ️ يمكنك استخدام الرابط المباشر للتحقق من الوجهة؛ الرابط المختصر يمر عبر صفحة إعلانية. "
-            "راجع الموقع الرسمي للتأكد من الأسعار والتوفر؛ فقد تتغير الخطط والميزات."
+            f"{link_section}\n"
+            "راجع موقع الأداة لمعرفة الأسعار والتوفر الحاليين."
         )
         keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🌐 افتح الأداة", url=destination_url)]]
