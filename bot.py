@@ -197,51 +197,69 @@ def build_draft(topic: str) -> str:
 
 
 async def find_commons_photo(topic: str):
-    """Find a relevant freely licensed photograph on Wikimedia Commons."""
+    """Find a relevant freely licensed photograph on Wikimedia Commons, with broader fallbacks."""
     api_url = "https://commons.wikimedia.org/w/api.php"
-    params = {
-        "action": "query",
-        "generator": "search",
-        "gsrsearch": f"{topic} filetype:bitmap",
-        "gsrnamespace": 6,
-        "gsrlimit": 10,
-        "prop": "imageinfo",
-        "iiprop": "url|mime|extmetadata",
-        "iiurlwidth": 1280,
-        "format": "json",
-    }
-    headers = {"User-Agent": "MoradTecTelegramBot/1.0 (content draft image lookup)"}
+    normalized = topic.lower()
+    queries = [f"{topic} filetype:bitmap"]
+    if any(word in normalized for word in ("ذكاء", "ai", "اصطناعي", "تعلم آلي", "تعلم الآلة")):
+        queries.extend([
+            "artificial intelligence education classroom students computer filetype:bitmap",
+            "students using computers classroom education filetype:bitmap",
+            "computer learning technology classroom filetype:bitmap",
+        ])
+    elif any(word in normalized for word in ("أمن", "حماية", "اختراق", "خصوصية", "سيبر")):
+        queries.extend([
+            "cybersecurity computer security filetype:bitmap",
+            "computer security laptop technology filetype:bitmap",
+        ])
+    elif any(word in normalized for word in ("هاتف", "تطبيق", "أندرويد", "اندرويد", "آيفون", "ايفون")):
+        queries.extend([
+            "smartphone mobile phone technology filetype:bitmap",
+            "person using smartphone mobile phone filetype:bitmap",
+        ])
+    headers = {"User-Agent": "MoradTecTelegramBot/1.1 (content draft image lookup)"}
     try:
-        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
-            response = await client.get(api_url, params=params, headers=headers)
-            response.raise_for_status()
-            payload = response.json()
-        pages = payload.get("query", {}).get("pages", {})
-        for page in pages.values():
-            info = (page.get("imageinfo") or [{}])[0]
-            mime = info.get("mime", "")
-            image_url = info.get("thumburl") or info.get("url")
-            if mime not in ("image/jpeg", "image/png") or not image_url:
-                continue
-            title = page.get("title", "")
-            # Prefer ordinary photographs; skip obvious logos, icons, diagrams and maps.
-            if re.search(r"(logo|icon|diagram|map|flag|symbol|screenshot|illustration|drawing|artwork|poster|chart|graph|render)", title, re.I):
-                continue
-            metadata = info.get("extmetadata", {})
-            license_name = metadata.get("LicenseShortName", {}).get("value", "ترخيص غير محدد")
-            description_url = "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_")
-            artist = metadata.get("Artist", {}).get("value", "المؤلف غير مذكور")
-            artist = re.sub(r"<[^>]+>", "", html.unescape(artist))
-            artist = re.sub(r"\s+", " ", artist).strip()[:180]
-            license_url = metadata.get("LicenseUrl", {}).get("value", "")
-            return {
-                "url": image_url,
-                "page": description_url,
-                "license": re.sub(r"<[^>]+>", "", html.unescape(license_name))[:100],
-                "license_url": license_url,
-                "artist": artist,
-                "title": title,
-            }
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            for search_query in queries:
+                params = {
+                    "action": "query",
+                    "generator": "search",
+                    "gsrsearch": search_query,
+                    "gsrnamespace": 6,
+                    "gsrlimit": 20,
+                    "prop": "imageinfo",
+                    "iiprop": "url|mime|extmetadata",
+                    "iiurlwidth": 1280,
+                    "format": "json",
+                }
+                response = await client.get(api_url, params=params, headers=headers)
+                response.raise_for_status()
+                payload = response.json()
+                pages = payload.get("query", {}).get("pages", {})
+                for page in pages.values():
+                    info = (page.get("imageinfo") or [{}])[0]
+                    mime = info.get("mime", "")
+                    image_url = info.get("thumburl") or info.get("url")
+                    if mime not in ("image/jpeg", "image/png") or not image_url:
+                        continue
+                    title = page.get("title", "")
+                    if re.search(r"(logo|icon|diagram|map|flag|symbol|screenshot|illustration|drawing|artwork|poster|chart|graph|render)", title, re.I):
+                        continue
+                    metadata = info.get("extmetadata", {})
+                    license_name = metadata.get("LicenseShortName", {}).get("value", "ترخيص غير محدد")
+                    description_url = "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_")
+                    artist = metadata.get("Artist", {}).get("value", "المؤلف غير مذكور")
+                    artist = re.sub(r"<[^>]+>", "", html.unescape(artist))
+                    artist = re.sub(r"\s+", " ", artist).strip()[:180]
+                    license_url = metadata.get("LicenseUrl", {}).get("value", "")
+                    return {
+                        "url": image_url,
+                        "page": description_url,
+                        "license": re.sub(r"<[^>]+>", "", html.unescape(license_name))[:100],
+                        "license_url": license_url,
+                        "artist": artist,
+                        "title": title,
+                    }
     except Exception:
         logger.warning("Wikimedia Commons photo lookup failed")
     return None
