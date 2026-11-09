@@ -162,7 +162,10 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not message.text:
             await message.reply_text("أرسل تعليق الصورة كنص من فضلك.")
             return
-        caption = message.text.strip()
+        caption, buttons, error = parse_post_content(message.text.strip())
+        if error:
+            await message.reply_text(error)
+            return
         if len(caption) > MAX_CAPTION_LENGTH:
             await message.reply_text(
                 f"تعليق الصورة يجب ألا يتجاوز {MAX_CAPTION_LENGTH} حرفاً. أعد إرساله بشكل أقصر."
