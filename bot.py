@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 import os
@@ -216,31 +217,46 @@ def build_image_prompt(topic: str) -> str:
 
 
 async def generate_ai_photo(topic: str):
-    """Generate a topic-specific image through Pollinations when an API key is configured."""
-    api_key = os.getenv("POLLINATIONS_API_KEY", "").strip()
-    if not api_key:
+    """Generate a topic-specific image through Cloudflare Workers AI."""
+    account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
+    if not account_id or not api_token:
         return None
-    prompt = build_image_prompt(topic)
-    # Encode the prompt as a single URL path segment.
-    image_url = "https://gen.pollinations.ai/image/" + quote(prompt, safe="") + (
-        "?model=black-forest-labs/flux.1-schnell&width=1280&height=720&nologo=true"
+
+    model = "@cf/black-forest-labs/flux-1-schnell"
+    endpoint = (
+        f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/"
+        f"{model}"
     )
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "image/*"}
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    payload = {"prompt": build_image_prompt(topic), "steps": 4}
+
     try:
-        async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
-            response = await client.get(image_url, headers=headers)
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            response = await client.post(endpoint, headers=headers, json=payload)
             response.raise_for_status()
-            content_type = response.headers.get("content-type", "").split(";")[0].lower()
-            if not content_type.startswith("image/") or not response.content or len(response.content) > 10 * 1024 * 1024:
-                logger.warning("AI image provider returned an invalid or oversized image response")
+            result = response.json().get("result")
+            image_b64 = result.get("image") if isinstance(result, dict) else result
+            if not isinstance(image_b64, str) or not image_b64:
+                logger.warning("Cloudflare AI response did not contain an image")
                 return None
-            return {"bytes": response.content, "content_type": content_type}
+            image_bytes = base64.b64decode(image_b64, validate=True)
+            if not image_bytes or len(image_bytes) > 10 * 1024 * 1024:
+                logger.warning("Cloudflare AI returned an empty or oversized image")
+                return None
+            return {"bytes": image_bytes, "content_type": "image/jpeg"}
     except httpx.HTTPStatusError as exc:
-        logger.warning("AI image provider returned HTTP %s", exc.response.status_code)
+        logger.warning("Cloudflare Workers AI returned HTTP %s", exc.response.status_code)
     except httpx.RequestError as exc:
-        logger.warning("AI image provider network error: %s", type(exc).__name__)
+        logger.warning("Cloudflare AI network error: %s", type(exc).__name__)
+    except (ValueError, TypeError) as exc:
+        logger.warning("Cloudflare AI returned an invalid image response: %s", type(exc).__name__)
     except Exception as exc:
-        logger.warning("AI image generation failed: %s", type(exc).__name__)
+        logger.warning("Cloudflare AI image generation failed: %s", type(exc).__name__)
     return None
 
 
@@ -353,7 +369,7 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             image_file.name = f"moradtec-ai-image.{extension}"
             await update.message.reply_photo(
                 photo=image_file,
-                caption="🎨 صورة مولّدة بالذكاء الاصطناعي خصيصاً لهذا الموضوع عبر Pollinations.ai.",
+                caption="🎨 صورة مولّدة بالذكاء الاصطناعي خصيصاً لهذا الموضوع عبر Cloudflare Workers AI.",
             )
         except Exception:
             logger.warning("Could not send the AI-generated image")
