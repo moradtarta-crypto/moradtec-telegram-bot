@@ -26,6 +26,7 @@ class GroundedToolExplanationTests(unittest.TestCase):
             "title": "Example AI",
             "description": "A helpful AI platform.",
             "content": "Welcome to our platform.",
+            "url": "https://example.com",
         }, "إنشاء فيديو")
         self.assertIsNone(explanation)
 
@@ -34,10 +35,25 @@ class GroundedToolExplanationTests(unittest.TestCase):
             "title": "Text Video Maker",
             "description": "Text to video generator.",
             "content": "Enter a prompt to create videos from text.",
+            "url": "https://example.com",
         }, "إنشاء فيديو")
         self.assertIn("Text to Video", explanation)
         self.assertNotIn("Image to Video", explanation)
         self.assertNotIn("تعديل فيديو موجود", explanation)
+
+    def test_deepai_homepage_uses_official_video_guide(self):
+        explanation = build_grounded_explanation({
+            "title": "DeepAI",
+            "description": "Explore our AI generators.",
+            "content": "AI Video Generator. Create short videos.",
+            "url": "https://www.deepai.org/",
+        }, "إنشاء فيديو بالذكاء الاصطناعي")
+        self.assertIn("Text to Video", explanation)
+        self.assertIn("Image to Video", explanation)
+        self.assertIn("0.20 دولار/ثانية", explanation)
+        self.assertIn("0.30 دولار/ثانية", explanation)
+        self.assertIn("حق مشاركة الصورة والفيديو علناً", explanation)
+        self.assertIn("https://deepai.org/docs", explanation)
 
 
 if __name__ == "__main__":
