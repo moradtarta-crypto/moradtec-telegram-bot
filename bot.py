@@ -173,25 +173,49 @@ def _tool_search_terms(query: str) -> str:
 
 
 def _is_likely_product_page(title: str, url: str, description: str, content: str, query: str) -> bool:
-    """Reject generic AI landing pages, sign-in screens, directories, and irrelevant pages."""
-    combined = f"{title} {url} {description}".lower()
+    """Require task-specific evidence; broad mentions in page text are not enough."""
+    title_desc_url = f"{title} {url} {description}".lower()
+    full_text = f"{title_desc_url} {content[:5000]}".lower()
     rejected = (
         "sign in", "log in", "login", "how we're making ai helpful",
         "about google ai", "ai research", "product hunt", "directory",
         "best ai tools", "top ai tools", "pricing plans only",
+        "character chat", "talk to ai characters", "roleplay chat",
     )
-    if any(term in combined for term in rejected):
+    if any(term in title_desc_url for term in rejected):
         return False
-    product_signals = (
-        "try", "create", "generate", "generator", "studio", "app",
-        "editor", "assistant", "maker", "start creating", "get started",
-    )
-    if not any(term in combined or term in content.lower()[:3500] for term in product_signals):
-        return False
-    task_terms = _tool_search_terms(query).lower().split()
-    content_sample = f"{title} {description} {content[:5000]}".lower()
-    relevant_terms = [term for term in task_terms if len(term) > 3 and term not in {"generator", "assistant", "software"}]
-    return not relevant_terms or any(term in content_sample for term in relevant_terms)
+
+    normalized = query.lower()
+    task_patterns = []
+    if any(word in normalized for word in ("فيديو", "مقاطع", "video")):
+        task_patterns = (
+            "ai video generator", "video generator", "text to video",
+            "image to video", "ai video creation", "generate videos",
+            "video generation", "create videos with ai",
+        )
+    elif any(word in normalized for word in ("صور", "صورة", "image")):
+        task_patterns = ("ai image generator", "image generator", "text to image", "image generation")
+    elif any(word in normalized for word in ("شعار", "logo")):
+        task_patterns = ("logo maker", "logo generator", "ai logo")
+    elif any(word in normalized for word in ("صوت", "تعليق صوتي", "tts", "text to speech")):
+        task_patterns = ("text to speech", "ai voice generator", "voice generator", "speech synthesis")
+    elif any(word in normalized for word in ("موسيقى", "أغاني", "music")):
+        task_patterns = ("ai music generator", "music generator", "music generation")
+    elif any(word in normalized for word in ("عروض", "تقديمية", "presentation", "slides")):
+        task_patterns = ("ai presentation maker", "presentation generator", "ai slides")
+    elif any(word in normalized for word in ("كتابة", "مقالات", "writing")):
+        task_patterns = ("ai writing assistant", "writing generator", "content generator")
+    elif any(word in normalized for word in ("برمجة", "كود", "coding", "code")):
+        task_patterns = ("ai coding assistant", "code assistant", "ai code generator")
+    elif any(word in normalized for word in ("ترجمة", "translation")):
+        task_patterns = ("ai translation", "translation tool", "machine translation")
+
+    if task_patterns:
+        # The page's title/URL/description must identify the requested product category.
+        return any(term in title_desc_url for term in task_patterns)
+
+    product_signals = ("generator", "studio", "editor", "assistant", "maker", "create")
+    return any(term in title_desc_url for term in product_signals)
 
 
 async def search_ai_tool_sites(query: str):
@@ -335,7 +359,28 @@ async def explain_ai_tool(tool: dict):
             response.raise_for_status()
             result = response.json().get("result", {})
             text = result.get("response", "") if isinstance(result, dict) else ""
-            return text.strip()[:3000] if isinstance(text, str) and text.strip() else None
+            if not isinstance(text, str) or not text.strip():
+                return None
+            # Remove repeated sentences and reject obvious generation glitches.
+            raw = re.sub(r"\\s+", " ", text).strip()
+            sentences = re.split(r"(?<=[.!؟])\\s+", raw)
+            unique = []
+            seen = set()
+            for sentence in sentences:
+                sentence = sentence.strip()
+                key = re.sub(r"[^\\w]+", "", sentence.lower())
+                if sentence and key and key not in seen:
+                    seen.add(key)
+                    unique.append(sentence)
+            cleaned = " ".join(unique).strip()
+            if len(cleaned) < 70 or re.search(r"[\\u0600-\\u06ff]\\s+[A-Za-z]{2,}\\s+[\\u0600-\\u06ff]", cleaned):
+                return None
+            # Never repeat a pricing claim unless the inspected page itself contains it.
+            pricing_claim = re.search(r"(\\$\\s?\\d|\\d+(?:\\.\\d+)?\\s?(?:دولار|يورو)|مجاني(?:ة)?|بلا حدود|غير محدود)", cleaned, re.I)
+            source_text = (tool.get("title", "") + " " + tool.get("description", "") + " " + tool.get("content", "")).lower()
+            if pricing_claim and not any(token in source_text for token in ("pricing", "price", "free", "مجاني", "دولار", "unlimited")):
+                return None
+            return cleaned[:1800]
     except httpx.HTTPStatusError as exc:
         logger.warning("Cloudflare text model returned HTTP %s", exc.response.status_code)
     except httpx.RequestError as exc:
