@@ -34,6 +34,7 @@
 | `BOT_TOKEN` | رمز البوت من BotFather (لا تنشره أو ترسله في المحادثات) |
 | `OWNER_ID` | رقم حساب Telegram الخاص بالمالك، ويُعرف عبر أمر `/id` |
 | `CHANNEL_ID` | `@MoradTecAI` |
+| `SHRTFLY_API_TOKEN` | رمز API الخاص بحساب ShrtFly؛ يُحفظ في Render فقط ولا يُرفع إلى GitHub أو يُرسل في المحادثات |
 | `GITHUB_TOKEN` | Fine-grained token خاص بالمستودع، بصلاحية Contents وPull requests: Read and write؛ يُحفظ في Render فقط | 
 | `GITHUB_REPOSITORY` | `moradtarta-crypto/moradtec-telegram-bot` |
 | `CLOUDFLARE_ACCOUNT_ID` | اختياري: معرّف حساب Cloudflare لتوليد الصور؛ أضفه في إعدادات الاستضافة فقط ولا تحفظه في GitHub |
