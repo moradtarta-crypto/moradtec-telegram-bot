@@ -22,6 +22,30 @@ class SelfImprovementTests(unittest.TestCase):
             manifest = next(item for item in checks if item.name == "dependencies_manifest")
             self.assertFalse(manifest.ok)
 
+    def test_detects_registered_command_handlers_without_ast_error(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = (
+                "from telegram.ext import CommandHandler\\n"
+                "app.add_handler(CommandHandler('start', start))\\n"
+                "app.add_handler(CommandHandler('help', help_command))\\n"
+                "app.add_handler(CommandHandler('selfcheck', selfcheck_command))\\n"
+                "app.add_handler(CommandHandler('improve', improve_command))\\n"
+                "app.add_handler(CommandHandler('autodev', autodev_command))\\n"
+                "def guard(update): return is_owner(update)\\n"
+                "secret_token=WEBHOOK_SECRET\\n"
+            )
+            (root / "bot.py").write_text(source, encoding="utf-8")
+            (root / "requirements.txt").write_text("httpx\\n", encoding="utf-8")
+            with unittest.mock.patch.dict("os.environ", {
+                "BOT_TOKEN": "configured",
+                "OWNER_ID": "123",
+                "CHANNEL_ID": "@example",
+            }):
+                checks = run_self_check(root)
+            commands = next(item for item in checks if item.name == "owner_tools_registered")
+            self.assertTrue(commands.ok, commands.detail)
+
     def test_check_serializes_without_secrets(self):
         item = Check("secret_hygiene", False, "Possible secret; value hidden.", "critical")
         self.assertEqual(item.as_dict()["severity"], "critical")
