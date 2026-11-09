@@ -8,11 +8,15 @@ import ipaddress
 from html.parser import HTMLParser
 from xml.etree import ElementTree
 from io import BytesIO
+from pathlib import Path
 
 import httpx
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from self_improvement import create_ai_improvement_plan, run_self_check
+from self_developer import create_code_proposal
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -454,6 +458,110 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
+async def selfcheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run safe local diagnostics and summarize the results."""
+    if not is_owner(update):
+        await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
+        return
+
+    checks = run_self_check(Path(__file__).resolve().parent)
+    passed = sum(1 for item in checks if item.ok)
+    lines = [
+        "🩺 تقرير الفحص الذاتي لـ MoradTec",
+        f"النتيجة: {passed}/{len(checks)} فحوصات ناجحة",
+        "",
+    ]
+    for item in checks:
+        symbol = "✅" if item.ok else ("🛑" if item.severity == "critical" else "⚠️")
+        lines.append(f"{symbol} {item.name}: {item.detail}")
+    report = await create_ai_improvement_plan(checks)
+    if report:
+        lines.extend(["", "🧠 تحليل الذكاء الاصطناعي:", report])
+    else:
+        lines.extend([
+            "",
+            "ℹ️ لم يتوفر تحليل Workers AI في هذه المحاولة؛ التقرير أعلاه ناتج عن فحوصات محلية.",
+        ])
+    lines.extend([
+        "",
+        "هذا الفحص للقراءة فقط: لا يعدّل الملفات ولا ينشر أي شيء.",
+    ])
+    await update.message.reply_text("\n".join(lines)[:3900])
+
+
+async def improve_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Turn an owner goal and local diagnostics into a prioritized improvement plan."""
+    if not is_owner(update):
+        await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
+        return
+    goal = " ".join(context.args).strip()
+    if len(goal) < 4:
+        await update.message.reply_text(
+            "اكتب ما تريد تحسينه، مثلاً:\n"
+            "/improve تحسين دقة البحث عن أدوات إنشاء الفيديو"
+        )
+        return
+    if len(goal) > 300:
+        await update.message.reply_text("اختصر هدف التحسين إلى 300 حرف كحد أقصى.")
+        return
+
+    status = await update.message.reply_text("🧠 أحلل حالة البوت وأرتب خطة التحسين...")
+    checks = run_self_check(Path(__file__).resolve().parent)
+    plan = await create_ai_improvement_plan(checks, goal)
+    if not plan:
+        await status.edit_text(
+            "تعذر إنشاء خطة الذكاء الاصطناعي حالياً. تأكد من توفر إعدادات Workers AI في Render، "
+            "ثم أعد المحاولة. لم يتم تغيير أي ملف."
+        )
+        return
+    lines = [
+        "🛠️ خطة تحسين MoradTec",
+        f"الهدف: {goal}",
+        "",
+        plan,
+        "",
+        "🔒 هذه المرحلة تقترح التحسينات فقط؛ لا تعدّل الكود أو تنشره تلقائياً.",
+    ]
+    await status.edit_text("\n".join(lines)[:3900])
+
+
+async def autodev_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Generate a restricted code proposal and open a draft GitHub pull request."""
+    if not is_owner(update):
+        await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
+        return
+
+    goal = " ".join(context.args).strip()
+    if len(goal) < 8:
+        await update.message.reply_text("اكتب هدفاً واضحاً للتحسين، مثالياً: /autodev إضافة دالة لتنظيف عناوين المواقع")
+        return
+    if len(goal) > 240:
+        await update.message.reply_text("اختصر هدف التحسين إلى 240 حرفاً كحد أقصى.")
+        return
+
+    status = await update.message.reply_text("🧠 أُنشئ مقترحاً برمجياً وأفحصه، ثم سأرفعه إلى GitHub كطلب مراجعة مسودة...")
+    try:
+        proposal = await create_code_proposal(goal)
+    except (RuntimeError, ValueError) as exc:
+        await status.edit_text(f"تعذر إنشاء طلب التطوير: {exc}")
+        return
+    except Exception as exc:
+        logger.error("Unexpected autodev failure: %s", type(exc).__name__)
+        await status.edit_text("حدث خطأ غير متوقع أثناء إعداد المقترح. لم يتم دمج أي تغيير أو نشره.")
+        return
+
+    if not proposal.get("url"):
+        await status.edit_text("لم يُنشأ رابط طلب المراجعة. لم يتم دمج أي تغيير أو نشره.")
+        return
+    await status.edit_text(
+        "✅ تم إنشاء مقترح برمجي في GitHub.\n"
+        f"📄 الملف: {proposal['path']}\n"
+        f"🌿 الفرع: {proposal['branch']}\n"
+        f"🔎 طلب المراجعة: {proposal['url']}\n\n"
+        "هذا طلب مسودة للمراجعة فقط؛ لم يُدمج الكود ولم يُنشر إلى البوت الحي."
+    )
+
+
 WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
 WEBHOOK_PATH = hashlib.sha256((BOT_TOKEN + ":path").encode("utf-8")).hexdigest()
 
@@ -506,6 +614,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "مرحباً بك في مساعد MoradTec 🤖\n\n"
         "أرسل /id لمعرفة رقم حسابك Telegram.\n"
         "استخدم /ideas لاقتراح مواضيع، و/draft الموضوع لإنشاء مسودة، أو /post لنشر محتوى ترسله بنفسك.\n"
+        "استخدم /selfcheck لفحص البوت و/improve الهدف للحصول على خطة تطوير ذكية.\n"
         "استخدم /post لإرسال منشور نصي أو صورة مع تعليق، "
         "وسيُنشر تلقائياً بعد استلامه."
     )
@@ -526,6 +635,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/draft الموضوع - إنشاء مسودة تقنية قابلة للتعديل (لا تُنشر تلقائياً)\n"
         "/ideas - اقتراح أفكار منشورات تقنية\n"
         "/tools المجال - البحث عن أدوات ذكاء اصطناعي وشرح استخدامها مع روابطها الرسمية\n"
+        "/selfcheck - فحص صحة البوت وتحليل نتائجه\n"
+        "/improve الهدف - إعداد خطة تحسين بالذكاء الاصطناعي\n"
+        "/autodev الهدف - إنشاء مقترح كود وفتح طلب مراجعة مسودة على GitHub\n"
         "/post - إرسال منشور نصي أو صورة مع تعليق (نشر تلقائي)\n"
         "لإضافة زر رابط، أضف سطراً مثل: زر: افتح الموقع | https://example.com\n"
         "يمكن إضافة 4 أزرار روابط HTTPS كحد أقصى.\n"
@@ -988,6 +1100,9 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("draft", draft_command))
     app.add_handler(CommandHandler("ideas", ideas_command))
+    app.add_handler(CommandHandler("selfcheck", selfcheck_command))
+    app.add_handler(CommandHandler("improve", improve_command))
+    app.add_handler(CommandHandler("autodev", autodev_command))
     app.add_handler(CommandHandler("tools", tools_command))
     app.add_handler(CommandHandler("tool", tools_command))
     app.add_handler(CommandHandler("post", post_command))
