@@ -413,9 +413,12 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "إليك النتائج مع الشرح والروابط:"
     )
     for index, tool in enumerate(tools, start=1):
-        explanation = await explain_ai_tool(tool)
+        # Prefer deterministic, source-grounded guides whenever available.
+        # The generative model is used only when the inspected page lacks enough
+        # explicit facts for the deterministic explainer.
+        explanation = build_grounded_explanation(tool, query)
         if not explanation:
-            explanation = build_grounded_explanation(tool, query)
+            explanation = await explain_ai_tool(tool)
         if not explanation:
             explanation = (
                 "لم تتضمن الصفحة التي فُحصت تفاصيل كافية لإعداد شرح موثوق. "
