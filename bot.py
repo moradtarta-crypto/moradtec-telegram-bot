@@ -425,13 +425,13 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if shortened_url:
             destination_url = shortened_url
             link_note = (
-                "\\n\\nℹ️ تنبيه: الرابط المختصر يمر عبر صفحة إعلانية قبل الوصول إلى الموقع الرسمي."
+                "\n\nℹ️ تنبيه: الرابط المختصر يمر عبر صفحة إعلانية قبل الوصول إلى الموقع الرسمي."
             )
         message_text = (
-            f"🧰 الأداة {index}: {tool['title']}\\n\\n"
-            f"{explanation}\\n\\n"
+            f"🧰 الأداة {index}: {tool['title']}\n\n"
+            f"{explanation}\n\n"
             f"🌐 رابط الأداة: {destination_url}"
-            f"{link_note}\\n"
+            f"{link_note}\n"
             "ℹ️ راجع الموقع الرسمي للتأكد من الأسعار والتوفر؛ فقد تتغير الخطط والميزات."
         )
         keyboard = InlineKeyboardMarkup(
