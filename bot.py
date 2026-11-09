@@ -18,6 +18,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("moradtec-bot")
 
+# Avoid logging Telegram API request URLs, which may contain the bot token.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 OWNER_ID_RAW = os.getenv("OWNER_ID", "").strip()
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@MoradTecAI")
