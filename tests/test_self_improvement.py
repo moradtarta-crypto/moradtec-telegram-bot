@@ -64,7 +64,7 @@ class SelfImprovementTests(unittest.TestCase):
     def test_fallback_report_does_not_overclaim(self):
         checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
         result = _fallback_ai_report(checks)
-        self.assertIn("ضمن نطاق هذه الفحوصات", result)
+        self.assertIn("تغطي الفحوصات المحددة فقط", result)
         self.assertNotIn("آمن تماماً", result)
 
     def test_check_serializes_without_secrets(self):
