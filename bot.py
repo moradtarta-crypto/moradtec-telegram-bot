@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import html
+from io import BytesIO
 
 import httpx
 from urllib.parse import urlsplit
@@ -196,6 +197,55 @@ def build_draft(topic: str) -> str:
     )
 
 
+def build_image_prompt(topic: str) -> str:
+    """Create a concise editorial image prompt without text or logos."""
+    normalized = topic.lower()
+    if any(word in normalized for word in ("ذكاء", "ai", "اصطناعي", "تعلم آلي", "تعلم الآلة")):
+        scene = "a modern classroom where students learn with laptops and an AI assistant interface subtly represented on a screen"
+    elif any(word in normalized for word in ("أمن", "حماية", "اختراق", "خصوصية", "سيبر")):
+        scene = "a realistic cybersecurity workspace with a laptop, digital security concept, and subtle glowing network elements"
+    elif any(word in normalized for word in ("هاتف", "تطبيق", "أندرويد", "اندرويد", "آيفون", "ايفون")):
+        scene = "a person using a modern smartphone in a clean contemporary setting"
+    else:
+        scene = f"a realistic editorial technology scene illustrating {topic}"
+    return (
+        f"Create a high-quality photorealistic editorial photograph for a technology publication about {topic}. "
+        f"Main scene: {scene}. Wide 16:9 composition, natural cinematic lighting, professional photography, "
+        "clear subject, tasteful modern colors, realistic details. No text, no letters, no watermark, no logos, no collage."
+    )
+
+
+async def generate_ai_photo(topic: str):
+    """Generate a topic-specific image through Pollinations when an API key is configured."""
+    api_key = os.getenv("POLLINATIONS_API_KEY", "").strip()
+    if not api_key:
+        return None
+    prompt = build_image_prompt(topic)
+    image_url = "https://gen.pollinations.ai/image/" + httpx.URL("https://example.com").copy_with(path="/" + prompt).raw_path.decode("ascii", errors="ignore").lstrip("/")
+    # Use URL parameter encoding for the prompt path.
+    from urllib.parse import quote
+    image_url = "https://gen.pollinations.ai/image/" + quote(prompt, safe="") + (
+        "?model=black-forest-labs/flux.1-schnell&width=1280&height=720&nologo=true"
+    )
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "image/*"}
+    try:
+        async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+            response = await client.get(image_url, headers=headers)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "").split(";")[0].lower()
+            if not content_type.startswith("image/") or not response.content or len(response.content) > 10 * 1024 * 1024:
+                logger.warning("AI image provider returned an invalid or oversized image response")
+                return None
+            return {"bytes": response.content, "content_type": content_type}
+    except httpx.HTTPStatusError as exc:
+        logger.warning("AI image provider returned HTTP %s", exc.response.status_code)
+    except httpx.RequestError as exc:
+        logger.warning("AI image provider network error: %s", type(exc).__name__)
+    except Exception as exc:
+        logger.warning("AI image generation failed: %s", type(exc).__name__)
+    return None
+
+
 async def find_commons_photo(topic: str):
     """Find a relevant freely licensed photograph on Wikimedia Commons."""
     api_url = "https://commons.wikimedia.org/w/api.php"
@@ -296,30 +346,44 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     topic = clean_topic(topic)
     draft = build_draft(topic)
-    photo = await find_commons_photo(topic)
+    generated_photo = await generate_ai_photo(topic)
 
-    if photo:
+    if generated_photo:
         try:
+            image_file = BytesIO(generated_photo["bytes"])
+            image_file.name = "moradtec-ai-image.jpg"
             await update.message.reply_photo(
-                photo=photo["url"],
-                caption=(
-                    f"📷 صورة فوتوغرافية مقترحة\nالمصدر: Wikimedia Commons\n"
-                    f"المؤلف: {photo['artist']}\nالترخيص: {photo['license']}\n"
-                    f"تفاصيل الترخيص: {photo['license_url'] or photo['page']}"
-                ),
+                photo=image_file,
+                caption="🎨 صورة مولّدة بالذكاء الاصطناعي خصيصاً لهذا الموضوع عبر Pollinations.ai.",
             )
-            await update.message.reply_text(f"🔗 صفحة الصورة ومصدرها:\n{photo['page']}")
         except Exception:
-            logger.warning("Could not send the suggested Commons photo")
+            logger.warning("Could not send the AI-generated image")
+            generated_photo = None
+
+    if not generated_photo:
+        photo = await find_commons_photo(topic)
+        if photo:
+            try:
+                await update.message.reply_photo(
+                    photo=photo["url"],
+                    caption=(
+                        f"📷 صورة فوتوغرافية مقترحة\nالمصدر: Wikimedia Commons\n"
+                        f"المؤلف: {photo['artist']}\nالترخيص: {photo['license']}\n"
+                        f"تفاصيل الترخيص: {photo['license_url'] or photo['page']}"
+                    ),
+                )
+                await update.message.reply_text(f"🔗 صفحة الصورة ومصدرها:\n{photo['page']}")
+            except Exception:
+                logger.warning("Could not send the suggested Commons photo")
+                await update.message.reply_text(
+                    "📷 لم أتمكن من إرفاق الصورة تلقائياً؛ يمكنك فتح صفحة المصدر:\n"
+                    + photo["page"]
+                )
+        else:
             await update.message.reply_text(
-                "📷 لم أتمكن من إرفاق الصورة تلقائياً؛ يمكنك فتح صفحة المصدر:\n"
-                + photo["page"]
+                "📷 تعذّر توليد صورة أو العثور على صورة مناسبة حالياً؛ "
+                "يمكنك إضافة صورة من اختيارك قبل النشر."
             )
-    else:
-        await update.message.reply_text(
-            "📷 لم أعثر على صورة فوتوغرافية مناسبة لهذا الموضوع حالياً؛ "
-            "يمكنك إضافة صورة من اختيارك قبل النشر."
-        )
 
     await update.message.reply_text(
         "📝 هذه مسودة أولية قابلة للتعديل، ولم تُنشر في القناة.\n\n" + draft
