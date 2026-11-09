@@ -197,45 +197,51 @@ def build_draft(topic: str) -> str:
 
 
 async def find_commons_photo(topic: str):
-    """Find a relevant freely licensed photograph on Wikimedia Commons, with broader fallbacks."""
+    """Find a relevant freely licensed photograph on Wikimedia Commons."""
     api_url = "https://commons.wikimedia.org/w/api.php"
     normalized = topic.lower()
-    queries = [f"{topic} filetype:bitmap"]
+    queries = [topic]
     if any(word in normalized for word in ("ذكاء", "ai", "اصطناعي", "تعلم آلي", "تعلم الآلة")):
         queries.extend([
-            "artificial intelligence education classroom students computer filetype:bitmap",
-            "students using computers classroom education filetype:bitmap",
-            "computer learning technology classroom filetype:bitmap",
+            "artificial intelligence education classroom students computer",
+            "students using computers classroom education",
+            "computer learning technology classroom",
         ])
     elif any(word in normalized for word in ("أمن", "حماية", "اختراق", "خصوصية", "سيبر")):
-        queries.extend([
-            "cybersecurity computer security filetype:bitmap",
-            "computer security laptop technology filetype:bitmap",
-        ])
+        queries.extend(["cybersecurity computer security", "computer security laptop technology"])
     elif any(word in normalized for word in ("هاتف", "تطبيق", "أندرويد", "اندرويد", "آيفون", "ايفون")):
-        queries.extend([
-            "smartphone mobile phone technology filetype:bitmap",
-            "person using smartphone mobile phone filetype:bitmap",
-        ])
-    headers = {"User-Agent": "MoradTecTelegramBot/1.1 (content draft image lookup)"}
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            for search_query in queries:
-                params = {
+        queries.extend(["smartphone mobile phone technology", "person using smartphone"])
+    headers = {"User-Agent": "MoradTecTelegramBot/1.2 (Wikimedia Commons image search)"}
+
+    async with httpx.AsyncClient(timeout=18.0, follow_redirects=True) as client:
+        for search_query in queries:
+            try:
+                search_params = {
                     "action": "query",
-                    "generator": "search",
-                    "gsrsearch": search_query,
-                    "gsrnamespace": 6,
-                    "gsrlimit": 20,
+                    "list": "search",
+                    "srsearch": search_query,
+                    "srnamespace": 6,
+                    "srlimit": 20,
+                    "format": "json",
+                }
+                search_response = await client.get(api_url, params=search_params, headers=headers)
+                search_response.raise_for_status()
+                results = search_response.json().get("query", {}).get("search", [])
+                titles = [item.get("title") for item in results if item.get("title")]
+                if not titles:
+                    continue
+
+                image_params = {
+                    "action": "query",
                     "prop": "imageinfo",
+                    "titles": "|".join(titles[:20]),
                     "iiprop": "url|mime|extmetadata",
                     "iiurlwidth": 1280,
                     "format": "json",
                 }
-                response = await client.get(api_url, params=params, headers=headers)
-                response.raise_for_status()
-                payload = response.json()
-                pages = payload.get("query", {}).get("pages", {})
+                image_response = await client.get(api_url, params=image_params, headers=headers)
+                image_response.raise_for_status()
+                pages = image_response.json().get("query", {}).get("pages", {})
                 for page in pages.values():
                     info = (page.get("imageinfo") or [{}])[0]
                     mime = info.get("mime", "")
@@ -250,7 +256,7 @@ async def find_commons_photo(topic: str):
                     description_url = "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_")
                     artist = metadata.get("Artist", {}).get("value", "المؤلف غير مذكور")
                     artist = re.sub(r"<[^>]+>", "", html.unescape(artist))
-                    artist = re.sub(r"\s+", " ", artist).strip()[:180]
+                    artist = re.sub(r"\\s+", " ", artist).strip()[:180]
                     license_url = metadata.get("LicenseUrl", {}).get("value", "")
                     return {
                         "url": image_url,
@@ -260,8 +266,14 @@ async def find_commons_photo(topic: str):
                         "artist": artist,
                         "title": title,
                     }
-    except Exception:
-        logger.warning("Wikimedia Commons photo lookup failed")
+            except httpx.HTTPStatusError as exc:
+                logger.warning("Commons API returned HTTP %s during image lookup", exc.response.status_code)
+            except httpx.RequestError as exc:
+                logger.warning("Commons network error during image lookup: %s", type(exc).__name__)
+            except (ValueError, KeyError, TypeError):
+                logger.warning("Commons returned an unreadable image-search response")
+            except Exception as exc:
+                logger.warning("Unexpected Commons image-search error: %s", type(exc).__name__)
     return None
 
 
