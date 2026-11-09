@@ -6,6 +6,7 @@ import re
 import html
 import ipaddress
 from html.parser import HTMLParser
+from xml.etree import ElementTree
 from io import BytesIO
 
 import httpx
@@ -152,17 +153,54 @@ def _clean_search_url(raw_url: str):
 
 
 async def search_ai_tool_sites(query: str):
-    """Search the web, then verify candidate official product pages by fetching them."""
+    """Search using multiple engines, then verify candidate official product pages."""
     search_query = f"AI tool {query} official website how to use"
-    async with httpx.AsyncClient(timeout=18.0, headers=SEARCH_HEADERS, follow_redirects=True) as client:
-        response = await client.get(AI_TOOL_SEARCH_URL, params={"q": search_query})
-        response.raise_for_status()
-        parser = SearchResultsParser()
-        parser.feed(response.text[:1_500_000])
+    found = []
+    seen_hosts = set()
+    last_error = None
 
-        found = []
-        seen_hosts = set()
-        for item in parser.results:
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(14.0, connect=8.0),
+        headers=SEARCH_HEADERS,
+        follow_redirects=True,
+    ) as client:
+        search_results = []
+
+        # Try DuckDuckGo first, then Bing RSS if the first provider is unavailable.
+        try:
+            response = await client.get(AI_TOOL_SEARCH_URL, params={"q": search_query})
+            response.raise_for_status()
+            parser = SearchResultsParser()
+            parser.feed(response.text[:1_500_000])
+            search_results = parser.results
+        except httpx.HTTPError as exc:
+            last_error = exc
+            logger.warning("DuckDuckGo search unavailable: %s", type(exc).__name__)
+
+        if not search_results:
+            try:
+                response = await client.get(
+                    "https://www.bing.com/search",
+                    params={"format": "rss", "q": search_query},
+                    headers={"Accept": "application/rss+xml, application/xml, text/xml"},
+                )
+                response.raise_for_status()
+                root = ElementTree.fromstring(response.text[:1_500_000])
+                for item in root.findall(".//item"):
+                    link = item.findtext("link") or ""
+                    title = item.findtext("title") or ""
+                    if link:
+                        search_results.append({"href": link, "title": title})
+            except (httpx.HTTPError, ElementTree.ParseError, ValueError) as exc:
+                last_error = exc
+                logger.warning("Bing fallback search unavailable: %s", type(exc).__name__)
+
+        if not search_results:
+            if last_error:
+                raise last_error
+            return []
+
+        for item in search_results:
             candidate_url = _clean_search_url(item.get("href"))
             if not candidate_url:
                 continue
@@ -183,8 +221,8 @@ async def search_ai_tool_sites(query: str):
                     continue
                 page_parser = PageTextParser()
                 page_parser.feed(page_response.text[:1_000_000])
-                title = re.sub(r"\s+", " ", " ".join(page_parser.title_parts)).strip()
-                visible_text = re.sub(r"\s+", " ", " ".join(page_parser.text_parts)).strip()
+                title = re.sub(r"\\s+", " ", " ".join(page_parser.title_parts)).strip()
+                visible_text = re.sub(r"\\s+", " ", " ".join(page_parser.text_parts)).strip()
                 description = page_parser.description
                 if not title:
                     title = item.get("title") or final_host
@@ -203,7 +241,8 @@ async def search_ai_tool_sites(query: str):
             except Exception as exc:
                 logger.warning("Could not inspect a search result: %s", type(exc).__name__)
                 continue
-        return found
+
+    return found
 
 
 async def explain_ai_tool(tool: dict):
