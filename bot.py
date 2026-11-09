@@ -186,6 +186,32 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+
+async def ideas_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Suggest evergreen technology topics; does not publish anything."""
+    if not is_owner(update):
+        await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
+        return
+
+    await update.message.reply_text(
+        "💡 أفكار محتوى لقناة MoradTec\\n\\n"
+        "🤖 الذكاء الاصطناعي:\\n"
+        "1. كيف تكتب طلباً واضحاً للحصول على نتائج أفضل من أدوات الذكاء الاصطناعي؟\\n"
+        "2. استخدامات الذكاء الاصطناعي في الدراسة والعمل.\\n"
+        "3. أخطاء شائعة عند الاعتماد على إجابات الذكاء الاصطناعي.\\n\\n"
+        "🔐 الأمن الرقمي:\\n"
+        "4. خطوات بسيطة لحماية حساباتك من الاختراق.\\n"
+        "5. كيف تميّز رسائل التصيّد والروابط المشبوهة؟\\n"
+        "6. لماذا يجب تفعيل المصادقة الثنائية؟\\n\\n"
+        "📱 الهواتف والتطبيقات:\\n"
+        "7. أذونات التطبيقات: ما الذي يستحق الموافقة؟\\n"
+        "8. نصائح لتحسين أداء هاتف Android.\\n"
+        "9. كيف تختار تطبيقاً آمناً ومفيداً؟\\n\\n"
+        "✍️ لإنشاء مسودة عن أي فكرة، استخدم مثلاً:\\n"
+        "/draft خطوات بسيطة لحماية حساباتك من الاختراق\\n\\n"
+        "هذه أفكار تحريرية عامة وليست أخباراً مباشرة أو معلومات تم التحقق من حداثتها."
+    )
+
 async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_owner(update):
         await update.message.reply_text("عذراً، هذا البوت مخصص لمالكه فقط.")
@@ -323,6 +349,7 @@ def main() -> None:
     app.add_handler(CommandHandler("id", show_id))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("draft", draft_command))
+    app.add_handler(CommandHandler("ideas", ideas_command))
     app.add_handler(CommandHandler("post", post_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(
