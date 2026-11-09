@@ -6,7 +6,6 @@ from urllib.parse import urlsplit
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
-    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -60,7 +59,7 @@ def parse_post_content(content: str):
             buttons.append({"label": label, "url": url})
         else:
             clean_lines.append(line)
-    text = "\\n".join(clean_lines).strip()
+    text = "\n".join(clean_lines).strip()
     if not text:
         return None, None, "أضف نص المنشور قبل أزرار الروابط."
     return text, buttons, None
@@ -78,8 +77,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحباً بك في مساعد MoradTec 🤖\n\n"
         "أرسل /id لمعرفة رقم حسابك Telegram.\n"
-        "استخدم /post لإعداد منشور نصي أو صورة مع تعليق، "
-        "ولن يُنشر شيء قبل موافقتك."
+        "استخدم /post لإرسال منشور نصي أو صورة مع تعليق، "
+        "وسيُنشر تلقائياً بعد استلامه."
     )
 
 
@@ -95,7 +94,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     await update.message.reply_text(
         "الأوامر المتاحة:\n"
-        "/post - إعداد منشور نصي أو صورة مع تعليق ومعاينته\n"
+        "/post - إرسال منشور نصي أو صورة مع تعليق (نشر تلقائي)\n"
         "لإضافة زر رابط، أضف سطراً مثل: زر: افتح الموقع | https://example.com\n"
         "يمكن إضافة 4 أزرار روابط HTTPS كحد أقصى.\n"
         "/cancel - إلغاء إعداد المنشور\n"
@@ -112,10 +111,11 @@ async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     context.user_data.pop("draft_photo_id", None)
     context.user_data.pop("pending_post", None)
     await update.message.reply_text(
-        "أرسل نص المنشور، أو أرسل صورة مع تعليقها. "
+        "وضع النشر التلقائي مفعّل لهذه العملية. أرسل الآن نص المنشور أو صورة مع تعليقها. "
+        "سيُنشر المحتوى مباشرة في القناة بعد استلامه.\n"
         "لإضافة زر رابط أضف سطراً مثل: زر: افتح الموقع | https://example.com "
-        "(حتى 4 أزرار بروابط HTTPS). "
-        "لن يُنشر شيء قبل ضغطك على زر الموافقة."
+        "(حتى 4 أزرار بروابط HTTPS).\n"
+        "أرسل /cancel لإلغاء العملية قبل إرسال المحتوى."
     )
 
 
@@ -128,31 +128,33 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text("تم إلغاء المنشور قيد الإعداد.")
 
 
-async def show_preview(message, context: ContextTypes.DEFAULT_TYPE, draft: dict) -> None:
-    context.user_data["waiting_for_post"] = False
-    context.user_data["waiting_for_caption"] = False
-    context.user_data["pending_post"] = draft
-    link_rows = [
-        [InlineKeyboardButton(button["label"], url=button["url"])]
-        for button in draft.get("buttons", [])
-    ]
-    link_rows.append([
-        InlineKeyboardButton("✅ موافقة ونشر", callback_data="publish"),
-        InlineKeyboardButton("❌ رفض", callback_data="reject"),
-    ])
-    keyboard = InlineKeyboardMarkup(link_rows)
-    if draft.get("photo_id"):
-        caption = "👀 معاينة المنشور — لم يتم النشر بعد:\n\n" + (draft.get("text") or "")
-        await message.reply_photo(
-            photo=draft["photo_id"],
-            caption=caption,
-            reply_markup=keyboard,
-        )
-    else:
+async def publish_post(message, context: ContextTypes.DEFAULT_TYPE, draft: dict) -> None:
+    """Publish the owner's submitted post immediately to the configured channel."""
+    try:
+        if draft.get("photo_id"):
+            await context.bot.send_photo(
+                chat_id=CHANNEL_ID,
+                photo=draft["photo_id"],
+                caption=draft.get("text") or None,
+                reply_markup=link_keyboard(draft.get("buttons", [])),
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=draft["text"],
+                disable_web_page_preview=False,
+                reply_markup=link_keyboard(draft.get("buttons", [])),
+            )
+    except Exception:
+        logger.exception("Failed to publish to channel")
         await message.reply_text(
-            "👀 معاينة المنشور — لم يتم النشر بعد:\n\n" + draft["text"],
-            reply_markup=keyboard,
+            "تعذر النشر في القناة. تأكد أن البوت مشرف ولديه صلاحية نشر الرسائل، ثم أعد المحاولة باستخدام /post."
         )
+        return
+
+    for key in ("waiting_for_post", "waiting_for_caption", "draft_photo_id", "pending_post"):
+        context.user_data.pop(key, None)
+    await message.reply_text("✅ تم نشر المحتوى تلقائياً في قناة MoradTec.")
 
 
 async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -180,7 +182,7 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             context.user_data["waiting_for_caption"] = False
             await message.reply_text("انتهت جلسة إعداد الصورة. أرسل /post للبدء من جديد.")
             return
-        await show_preview(message, context, {"photo_id": photo_id, "text": caption, "buttons": buttons})
+        await publish_post(message, context, {"photo_id": photo_id, "text": caption, "buttons": buttons})
         return
 
     if not context.user_data.get("waiting_for_post"):
@@ -206,7 +208,7 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             context.user_data["draft_photo_id"] = photo_id
             await message.reply_text("وصلت الصورة. أرسل الآن النص أو التعليق الذي تريد إرفاقه بها.")
             return
-        await show_preview(message, context, {"photo_id": photo_id, "text": caption})
+        await publish_post(message, context, {"photo_id": photo_id, "text": caption, "buttons": buttons})
         return
 
     if message.text:
@@ -222,54 +224,7 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 f"الحد الأقصى للمنشور النصي {MAX_POST_LENGTH} حرفاً. اختصر النص ثم أعد إرساله."
             )
             return
-        await show_preview(message, context, {"text": content, "buttons": buttons})
-
-
-async def review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    if not query:
-        return
-    if not is_owner(update):
-        await query.answer("غير مصرح لك باستخدام هذا الزر.", show_alert=True)
-        return
-
-    pending = context.user_data.get("pending_post")
-    if query.data == "reject":
-        context.user_data.pop("pending_post", None)
-        await query.answer("تم رفض المنشور.")
-        await query.edit_message_caption("❌ تم رفض المنشور ولم يُنشر.") if query.message and query.message.photo else await query.edit_message_text("❌ تم رفض المنشور ولم يُنشر.")
-        return
-
-    if query.data == "publish":
-        if not pending:
-            await query.answer("لا يوجد منشور معلّق.", show_alert=True)
-            return
-        try:
-            if pending.get("photo_id"):
-                await context.bot.send_photo(
-                    chat_id=CHANNEL_ID,
-                    photo=pending["photo_id"],
-                    caption=pending.get("text") or None,
-                    reply_markup=link_keyboard(pending.get("buttons", [])),
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=CHANNEL_ID,
-                    text=pending["text"],
-                    disable_web_page_preview=False,
-                    reply_markup=link_keyboard(pending.get("buttons", [])),
-                )
-        except Exception:
-            logger.exception("Failed to publish to channel")
-            await query.answer("تعذر النشر. تحقق من صلاحيات البوت في القناة.", show_alert=True)
-            return
-
-        context.user_data.pop("pending_post", None)
-        await query.answer("تم النشر.")
-        if query.message and query.message.photo:
-            await query.edit_message_caption("✅ تم نشر الصورة والمنشور في قناة MoradTec.")
-        else:
-            await query.edit_message_text("✅ تم نشر المنشور في قناة MoradTec.")
+        await publish_post(message, context, {"text": content, "buttons": buttons})
 
 
 def main() -> None:
@@ -285,7 +240,6 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("post", post_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
-    app.add_handler(CallbackQueryHandler(review_callback, pattern="^(publish|reject)$"))
     app.add_handler(
         MessageHandler((filters.PHOTO | filters.TEXT) & ~filters.COMMAND, receive_post)
     )
