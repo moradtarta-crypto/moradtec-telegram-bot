@@ -197,6 +197,7 @@ async def search_ai_tool_sites(query: str):
     search_query = f"{_tool_search_terms(query)} official website"
     found = []
     seen_hosts = set()
+    seen_final_hosts = set()
     last_error = None
 
     async with httpx.AsyncClient(
@@ -264,7 +265,7 @@ async def search_ai_tool_sites(query: str):
                 page_parser = PageTextParser()
                 page_parser.feed(page_response.text[:1_000_000])
                 title = re.sub(r"\s+", " ", " ".join(page_parser.title_parts)).strip()
-                visible_text = re.sub(r"\\s+", " ", " ".join(page_parser.text_parts)).strip()
+                visible_text = re.sub(r"\s+", " ", " ".join(page_parser.text_parts)).strip()
                 description = page_parser.description
                 if not title:
                     title = item.get("title") or final_host
