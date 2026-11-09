@@ -17,6 +17,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from self_improvement import create_ai_improvement_plan, run_self_check
 from self_developer import create_code_proposal
 from tool_search import canonical_tool_url, deduplicate_tool_results, is_relevant_tool
+from tool_explainer import build_grounded_explanation
 from shrtfly import shorten_with_shrtfly
 
 from telegram.ext import (
@@ -414,10 +415,12 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     for index, tool in enumerate(tools, start=1):
         explanation = await explain_ai_tool(tool)
         if not explanation:
+            explanation = build_grounded_explanation(tool, query)
+        if not explanation:
             explanation = (
-                "لم أتمكن من إنشاء شرح موثوق من محتوى الصفحة في هذه المحاولة. "
-                "افتح الموقع الرسمي وابحث عن قسم البدء أو Help/Getting Started؛ "
-                "لن أخمّن خطوات أو أسعاراً غير مؤكدة."
+                "لم تتضمن الصفحة التي فُحصت تفاصيل كافية لإعداد شرح موثوق. "
+                "يمكنك فتح الموقع الرسمي ومراجعة قسم المساعدة أو الوثائق؛ "
+                "لن أخمّن الوظائف أو خطوات الاستخدام أو الأسعار."
             )
         destination_url = tool["url"]
         shortened_url = await shorten_with_shrtfly(destination_url)
