@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from self_improvement import create_ai_improvement_plan, run_self_check
 from self_developer import create_code_proposal
+from tool_search import canonical_tool_url, deduplicate_tool_results, is_relevant_tool
 
 from telegram.ext import (
     Application,
@@ -169,6 +170,10 @@ def _tool_search_terms(query: str) -> str:
         (("كتابة", "مقالات", "كتابة المحتوى", "writing"), "AI writing assistant content generator"),
         (("برمجة", "كود", "coding", "code"), "AI coding assistant code editor"),
         (("ترجمة", "translation"), "AI translation tool"),
+        (("تحليل البيانات", "بيانات", "data analysis", "analytics"), "AI data analysis analytics tool"),
+        (("روبوت محادثة", "شات بوت", "chatbot"), "AI chatbot conversational AI platform"),
+        (("تفريغ صوت", "تحويل الصوت إلى نص", "transcription", "speech to text"), "AI speech to text transcription tool"),
+        (("بحث علمي", "مساعد بحث", "research assistant"), "AI research assistant literature review tool"),
     ]
     for keywords, terms in mappings:
         if any(keyword in normalized for keyword in keywords):
@@ -177,49 +182,14 @@ def _tool_search_terms(query: str) -> str:
 
 
 def _is_likely_product_page(title: str, url: str, description: str, content: str, query: str) -> bool:
-    """Require task-specific evidence; broad mentions in page text are not enough."""
-    title_desc_url = f"{title} {url} {description}".lower()
-    full_text = f"{title_desc_url} {content[:5000]}".lower()
-    rejected = (
-        "sign in", "log in", "login", "how we're making ai helpful",
-        "about google ai", "ai research", "product hunt", "directory",
-        "best ai tools", "top ai tools", "pricing plans only",
-        "character chat", "talk to ai characters", "roleplay chat",
+    """Use deterministic task relevance checks over product metadata and page text."""
+    return is_relevant_tool(
+        query,
+        title=title,
+        url=url,
+        description=description,
+        content=content,
     )
-    if any(term in title_desc_url for term in rejected):
-        return False
-
-    normalized = query.lower()
-    task_patterns = []
-    if any(word in normalized for word in ("فيديو", "مقاطع", "video")):
-        task_patterns = (
-            "ai video generator", "video generator", "text to video",
-            "image to video", "ai video creation", "generate videos",
-            "video generation", "create videos with ai",
-        )
-    elif any(word in normalized for word in ("صور", "صورة", "image")):
-        task_patterns = ("ai image generator", "image generator", "text to image", "image generation")
-    elif any(word in normalized for word in ("شعار", "logo")):
-        task_patterns = ("logo maker", "logo generator", "ai logo")
-    elif any(word in normalized for word in ("صوت", "تعليق صوتي", "tts", "text to speech")):
-        task_patterns = ("text to speech", "ai voice generator", "voice generator", "speech synthesis")
-    elif any(word in normalized for word in ("موسيقى", "أغاني", "music")):
-        task_patterns = ("ai music generator", "music generator", "music generation")
-    elif any(word in normalized for word in ("عروض", "تقديمية", "presentation", "slides")):
-        task_patterns = ("ai presentation maker", "presentation generator", "ai slides")
-    elif any(word in normalized for word in ("كتابة", "مقالات", "writing")):
-        task_patterns = ("ai writing assistant", "writing generator", "content generator")
-    elif any(word in normalized for word in ("برمجة", "كود", "coding", "code")):
-        task_patterns = ("ai coding assistant", "code assistant", "ai code generator")
-    elif any(word in normalized for word in ("ترجمة", "translation")):
-        task_patterns = ("ai translation", "translation tool", "machine translation")
-
-    if task_patterns:
-        # The page's title/URL/description must identify the requested product category.
-        return any(term in title_desc_url for term in task_patterns)
-
-    product_signals = ("generator", "studio", "editor", "assistant", "maker", "create")
-    return any(term in title_desc_url for term in product_signals)
 
 
 async def search_ai_tool_sites(query: str):
@@ -272,17 +242,21 @@ async def search_ai_tool_sites(query: str):
             candidate_url = _clean_search_url(item.get("href"))
             if not candidate_url:
                 continue
-            host = (urlsplit(candidate_url).hostname or "").lower()
-            root_host = ".".join(host.split(".")[-2:])
-            if root_host in seen_hosts:
+            canonical_candidate = canonical_tool_url(candidate_url)
+            if not canonical_candidate:
                 continue
-            seen_hosts.add(root_host)
+            host = (urlsplit(canonical_candidate).hostname or "").lower()
+            if host in seen_hosts:
+                continue
+            seen_hosts.add(host)
             try:
-                page_response = await client.get(candidate_url, follow_redirects=True)
+                page_response = await client.get(canonical_candidate, follow_redirects=True)
                 page_response.raise_for_status()
-                final_url = str(page_response.url)
+                final_url = canonical_tool_url(str(page_response.url))
+                if not final_url:
+                    continue
                 final_host = (urlsplit(final_url).hostname or "").lower()
-                if urlsplit(final_url).scheme != "https" or not final_host:
+                if not final_host or final_host in seen_final_hosts:
                     continue
                 content_type = page_response.headers.get("content-type", "").lower()
                 if "text/html" not in content_type:
@@ -298,6 +272,7 @@ async def search_ai_tool_sites(query: str):
                     continue
                 if not _is_likely_product_page(title, final_url, description, visible_text, query):
                     continue
+                seen_final_hosts.add(final_host)
                 found.append({
                     "title": title[:180],
                     "url": final_url,
@@ -312,7 +287,7 @@ async def search_ai_tool_sites(query: str):
                 logger.warning("Could not inspect a search result: %s", type(exc).__name__)
                 continue
 
-    return found
+    return deduplicate_tool_results(found)
 
 
 async def explain_ai_tool(tool: dict):
