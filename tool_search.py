@@ -65,7 +65,7 @@ TASK_TERMS = {
 
 PRODUCT_SIGNALS = (
     "generator", "studio", "editor", "assistant", "maker", "create",
-    "platform", "software", "tool", "app", "product",
+    "platform", "software", "app", "product",
 )
 DIRECTORY_SIGNALS = (
     "directory", "directories", "best ai tools", "top ai tools",
