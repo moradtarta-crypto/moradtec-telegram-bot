@@ -6,7 +6,7 @@ import html
 from io import BytesIO
 
 import httpx
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -221,9 +221,7 @@ async def generate_ai_photo(topic: str):
     if not api_key:
         return None
     prompt = build_image_prompt(topic)
-    image_url = "https://gen.pollinations.ai/image/" + httpx.URL("https://example.com").copy_with(path="/" + prompt).raw_path.decode("ascii", errors="ignore").lstrip("/")
-    # Use URL parameter encoding for the prompt path.
-    from urllib.parse import quote
+    # Encode the prompt as a single URL path segment.
     image_url = "https://gen.pollinations.ai/image/" + quote(prompt, safe="") + (
         "?model=black-forest-labs/flux.1-schnell&width=1280&height=720&nologo=true"
     )
