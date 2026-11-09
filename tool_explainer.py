@@ -12,7 +12,7 @@ DEEPAI_VIDEO_PAGE = "https://deepai.org/video"
 def _deepai_video_explanation(tool: dict) -> str:
     """Use facts verified in DeepAI's official video page and documentation."""
     title = str(tool.get("title") or "DeepAI AI Video Generator")
-    return "\\n".join([
+    return "\n".join([
         f"ما الأداة؟ {title} أداة من DeepAI لإنشاء مقاطع فيديو قصيرة وتحريرها بالذكاء الاصطناعي.",
         "ما الذي تستطيع فعله؟",
         "• إنشاء فيديو من وصف نصي (Text to Video).",
@@ -37,7 +37,7 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     content = str(tool.get("content", ""))
     url = str(tool.get("url", ""))
     source = " ".join((title, description, content))
-    normalized = re.sub(r"\\s+", " ", source).casefold()
+    normalized = re.sub(r"\s+", " ", source).casefold()
     host = (urlsplit(url).hostname or "").lower()
     task = (query or "").casefold()
 
@@ -86,20 +86,20 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     )):
         output.append("تنبيه خصوصية: يذكر المصدر أن الملفات أو النتائج قد تُشارك علناً؛ تجنب رفع صور أو مقاطع خاصة.")
     output.append("السعر والحدود: لم تتوفر في النص المفحوص معلومات سعرية مؤكدة؛ راجع صفحة الأسعار الرسمية.")
-    return "\\n".join(output)[:1700]
+    return "\n".join(output)[:1700]
 
 
 def hide_direct_links(explanation: str) -> str:
     """Remove direct URLs and repair link-dependent instructions when a short link is shown."""
     cleaned_lines = []
     for line in explanation.splitlines():
-        cleaned = re.sub(r"https?://\\S+", "", line).strip()
-        cleaned = re.sub(r"\\s+\\|\\s*$", "", cleaned).strip()
+        cleaned = re.sub(r"https?://\S+", "", line).strip()
+        cleaned = re.sub(r"\s+\|\s*$", "", cleaned).strip()
         if not cleaned:
             continue
         if re.fullmatch(r"(?:المراجع الرسمية|روابط رسمية|المصادر الرسمية)[:：]?", cleaned):
             continue
-        if re.fullmatch(r"(?:\\d+[.)]\\s*)?افتح (?:صفحة|الموقع|الرابط).{0,100}(?:الرسمية|رسمي)[:：]?", cleaned):
+        if re.fullmatch(r"(?:\d+[.)]\s*)?افتح (?:صفحة|الموقع|الرابط).{0,100}(?:الرسمية|رسمي)[:：]?", cleaned):
             cleaned = "افتح الأداة من الرابط المختصر الموجود أسفل الشرح."
         cleaned_lines.append(cleaned)
-    return "\\n".join(cleaned_lines)
+    return "\n".join(cleaned_lines)
