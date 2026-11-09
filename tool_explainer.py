@@ -37,7 +37,7 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     content = str(tool.get("content", ""))
     url = str(tool.get("url", ""))
     source = " ".join((title, description, content))
-    normalized = re.sub(r"\\s+", " ", source).casefold()
+    normalized = re.sub(r"\s+", " ", source).casefold()
     host = (urlsplit(url).hostname or "").lower()
     task = (query or "").casefold()
 
