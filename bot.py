@@ -202,7 +202,7 @@ async def find_commons_photo(topic: str):
     params = {
         "action": "query",
         "generator": "search",
-        "gsrsearch": topic,
+        "gsrsearch": f"{topic} filetype:bitmap",
         "gsrnamespace": 6,
         "gsrlimit": 10,
         "prop": "imageinfo",
@@ -225,7 +225,7 @@ async def find_commons_photo(topic: str):
                 continue
             title = page.get("title", "")
             # Prefer ordinary photographs; skip obvious logos, icons, diagrams and maps.
-            if re.search(r"(logo|icon|diagram|map|flag|symbol|screenshot)", title, re.I):
+            if re.search(r"(logo|icon|diagram|map|flag|symbol|screenshot|illustration|drawing|artwork|poster|chart|graph|render)", title, re.I):
                 continue
             metadata = info.get("extmetadata", {})
             license_name = metadata.get("LicenseShortName", {}).get("value", "ترخيص غير محدد")
@@ -272,7 +272,11 @@ async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await update.message.reply_photo(
                 photo=photo["url"],
-                caption=f"📷 صورة مقترحة\nالمصدر: Wikimedia Commons\nالمؤلف: {photo['artist']}\nالترخيص: {photo['license']}",
+                caption=(
+                    f"📷 صورة فوتوغرافية مقترحة\nالمصدر: Wikimedia Commons\n"
+                    f"المؤلف: {photo['artist']}\nالترخيص: {photo['license']}\n"
+                    f"تفاصيل الترخيص: {photo['license_url'] or photo['page']}"
+                ),
             )
             await update.message.reply_text(f"🔗 صفحة الصورة ومصدرها:\n{photo['page']}")
         except Exception:
