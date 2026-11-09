@@ -81,7 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحباً بك في مساعد MoradTec 🤖\n\n"
         "أرسل /id لمعرفة رقم حسابك Telegram.\n"
-        "استخدم /draft الموضوع لإنشاء مسودة تقنية، أو /post لنشر محتوى ترسله بنفسك.\n"
+        "استخدم /ideas لاقتراح مواضيع، و/draft الموضوع لإنشاء مسودة، أو /post لنشر محتوى ترسله بنفسك.\n"
         "استخدم /post لإرسال منشور نصي أو صورة مع تعليق، "
         "وسيُنشر تلقائياً بعد استلامه."
     )
