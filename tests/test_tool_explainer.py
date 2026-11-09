@@ -1,6 +1,6 @@
 import unittest
 
-from tool_explainer import build_grounded_explanation
+from tool_explainer import build_grounded_explanation, hide_direct_links
 
 
 class GroundedToolExplanationTests(unittest.TestCase):
@@ -21,6 +21,16 @@ class GroundedToolExplanationTests(unittest.TestCase):
         self.assertIn("تنبيه خصوصية", explanation)
         self.assertIn("25 ثانية HD", explanation)
         self.assertIn("https://deepai.org/docs", explanation)
+
+    def test_hides_direct_urls_when_short_link_is_available(self):
+        explanation = (
+            "طريقة الاستخدام: افتح https://deepai.org/video\n"
+            "المراجع الرسمية: https://deepai.org/docs | https://deepai.org/video"
+        )
+        cleaned = hide_direct_links(explanation)
+        self.assertNotIn("https://", cleaned)
+        self.assertNotIn("المراجع الرسمية:", cleaned)
+        self.assertIn("طريقة الاستخدام: افتح", cleaned)
 
     def test_does_not_invent_features_when_source_is_vague(self):
         explanation = build_grounded_explanation({

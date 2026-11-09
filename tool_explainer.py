@@ -87,3 +87,14 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
         output.append("تنبيه خصوصية: يذكر المصدر أن الملفات أو النتائج قد تُشارك علناً؛ تجنب رفع صور أو مقاطع خاصة.")
     output.append("السعر والحدود: لم تتوفر في النص المفحوص معلومات سعرية مؤكدة؛ راجع صفحة الأسعار الرسمية.")
     return "\n".join(output)[:1700]
+
+
+def hide_direct_links(explanation: str) -> str:
+    """Remove clickable URLs from a guide when a shortened destination is shown."""
+    cleaned_lines = []
+    for line in explanation.splitlines():
+        cleaned = re.sub(r"https?://\S+", "", line).strip()
+        cleaned = re.sub(r"\s+\|\s*$", "", cleaned).strip()
+        if cleaned and not re.fullmatch(r"(?:المراجع الرسمية|روابط رسمية|المصادر الرسمية)[:：]?", cleaned):
+            cleaned_lines.append(cleaned)
+    return "\n".join(cleaned_lines)
