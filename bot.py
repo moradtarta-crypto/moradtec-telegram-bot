@@ -77,6 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحباً بك في مساعد MoradTec 🤖\n\n"
         "أرسل /id لمعرفة رقم حسابك Telegram.\n"
+        "استخدم /draft الموضوع لإنشاء مسودة تقنية، أو /post لنشر محتوى ترسله بنفسك.\n"
         "استخدم /post لإرسال منشور نصي أو صورة مع تعليق، "
         "وسيُنشر تلقائياً بعد استلامه."
     )
@@ -94,11 +95,45 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     await update.message.reply_text(
         "الأوامر المتاحة:\n"
+        "/draft الموضوع - إنشاء مسودة تقنية قابلة للتعديل (لا تُنشر تلقائياً)\n"
         "/post - إرسال منشور نصي أو صورة مع تعليق (نشر تلقائي)\n"
         "لإضافة زر رابط، أضف سطراً مثل: زر: افتح الموقع | https://example.com\n"
         "يمكن إضافة 4 أزرار روابط HTTPS كحد أقصى.\n"
         "/cancel - إلغاء إعداد المنشور\n"
         "/id - عرض معرّف حسابك"
+    )
+
+
+async def draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Create an editable Arabic tech-post draft from an owner-supplied topic."""
+    if not is_owner(update):
+        await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
+        return
+
+    topic = " ".join(context.args).strip()
+    if not topic:
+        await update.message.reply_text(
+            "اكتب موضوع المنشور بعد الأمر بهذا الشكل:\n"
+            "/draft الذكاء الاصطناعي في التعليم"
+        )
+        return
+    if len(topic) > 180:
+        await update.message.reply_text("اجعل الموضوع أقصر من 180 حرفاً ثم أعد المحاولة.")
+        return
+
+    draft = (
+        f"💡 {topic}\n\n"
+        f"أصبح موضوع {topic} من المواضيع التي تستحق المتابعة في عالم التقنية. "
+        "فهم الفكرة وطريقة استخدامها يساعداننا على الاستفادة من الأدوات الرقمية بوعي.\n\n"
+        "🔹 **ما الذي ينبغي معرفته؟**\n"
+        "ابدأ بالتعرّف على المفهوم، ثم جرّب تطبيقاً موثوقاً له، وقارن النتائج قبل الاعتماد عليه.\n\n"
+        "⚠️ **نصيحة مهمة:**\n"
+        "تحقق من المعلومات ومصدرها، ولا تشارك بياناتك الشخصية أو الحساسة مع أي خدمة غير موثوقة.\n\n"
+        "💬 ما رأيكم؟ هل تستخدمون هذه التقنية؟ شاركونا تجاربكم في التعليقات.\n\n"
+        "#MoradTec #تقنية #تكنولوجيا #ذكاء_اصطناعي"
+    )
+    await update.message.reply_text(
+        "📝 هذه مسودة أولية قابلة للتعديل، ولم تُنشر في القناة.\n\n" + draft
     )
 
 
@@ -238,6 +273,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("id", show_id))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("draft", draft_command))
     app.add_handler(CommandHandler("post", post_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(
