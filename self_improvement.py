@@ -123,6 +123,55 @@ def run_self_check(project_root: str | Path = ".") -> list[Check]:
     return checks
 
 
+def _fallback_ai_report(checks: Iterable[Check], goal: str = "") -> str:
+    """Produce a concise, factual Arabic report when model output is poor."""
+    items = list(checks)
+    failed = [item for item in items if not item.ok]
+    if not failed:
+        lines = ["المراجعة المحلية: جميع الفحوصات اجتازت الاختبار."]
+        lines.append("لم تُسجل هذه الجولة مشكلة مؤكدة في الفحوصات السبعة.")
+        if goal:
+            lines.append(f"الهدف المطلوب: {goal[:180]}.")
+        lines.append("هذه النتيجة لا تثبت خلو التطبيق من جميع الثغرات؛ إنها تغطي الفحوصات المحددة فقط.")
+        return "\n".join(lines)
+    lines = ["المشكلات المؤكدة في الفحص المحلي:"]
+    for item in failed[:5]:
+        lines.append(f"- {item.name}: {item.detail}")
+    lines.append("ابدأ بمعالجة الفحوصات ذات الخطورة الحرجة، ثم أعد تشغيل /selfcheck.")
+    return "\n".join(lines)
+
+
+def _clean_ai_report(answer: str, checks: Iterable[Check], goal: str = "") -> str:
+    """Remove repeated/garbled model output and enforce a short report."""
+    if not isinstance(answer, str):
+        return _fallback_ai_report(checks, goal)
+    raw = answer.strip()
+    if len(raw) < 40:
+        return _fallback_ai_report(checks, goal)
+    # Split on sentence boundaries, keeping Arabic and English punctuation.
+    parts = re.split(r"(?<=[.!؟])\s+|[\r\n]+", raw)
+    unique = []
+    seen = set()
+    for part in parts:
+        part = re.sub(r"\s+", " ", part).strip(" -*•\t")
+        if len(part) < 18:
+            continue
+        normalized = re.sub(r"[^\w]", "", part.casefold())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(part)
+    if not unique:
+        return _fallback_ai_report(checks, goal)
+    # Repeated phrases or excessively long model responses are a quality failure.
+    if len(unique) < 2 or len(unique) / max(1, len(parts)) < 0.55:
+        return _fallback_ai_report(checks, goal)
+    cleaned = " ".join(unique[:5])
+    if len(cleaned) > 1100:
+        cleaned = cleaned[:1097].rsplit(" ", 1)[0] + "..."
+    return cleaned
+
+
 async def create_ai_improvement_plan(
     checks: Iterable[Check],
     goal: str = "",
@@ -142,11 +191,14 @@ async def create_ai_improvement_plan(
         "@cf/meta/llama-3.2-3b-instruct"
     )
     prompt = (
-        "أنت مهندس برمجيات مسؤول عن مراجعة مساعد Telegram اسمه MoradTec. "
-        "حلل نتائج الفحص التالية والهدف المطلوب. اكتب بالعربية خطة عملية قصيرة مرتبة حسب الأولوية. "
-        "ميّز بين العيوب المؤكدة والاقتراحات. لا تدّع أنك نفذت أي تغيير. "
-        "لا تطلب أسراراً أو رموز وصول. لا تقترح تعديل صلاحيات النشر التلقائي أو تجاوز فحوصات الأمان. "
-        "لا تكتب كوداً ولا تنفذ أوامر. إذا لم توجد مشكلة مؤكدة فقل ذلك بوضوح.\n\n"
+        "أنت مراجع برمجيات لمساعد Telegram اسمه MoradTec. "
+        "اكتب بالعربية الفصحى الواضحة فقط. استخدم 3 إلى 5 جمل قصيرة، بحد أقصى 120 كلمة. "
+        "ابدأ بذكر عدد الفحوصات الناجحة والفاشلة. إذا كانت كلها ناجحة، قل إنه لم تظهر مشكلة ضمن نطاق هذه الفحوصات، "
+        "ولا تخترع عيوباً أو تكرر نصائح عامة. إذا فشل فحص، اذكر اسم الفحص وسبب الفشل كما ورد حرفياً ثم اقترح خطوة واحدة محددة. "
+        "افصل بوضوح بين نتيجة مؤكدة واقتراح اختياري. لا تكرر الجمل أو العبارات. "
+        "لا تستخدم تعبيرات مثل الملك أو الملكية الخاصة بالملك. لا تدّع تنفيذ أي تغيير. "
+        "لا تطلب أسراراً أو رموز وصول، ولا تقترح تجاوز فحوصات الأمان أو تغيير صلاحيات النشر. "
+        "أخرج التقرير فقط دون مقدمة مطولة.\n\n"
         f"الهدف: {goal or 'مراجعة عامة لصحة البوت'}\n"
         f"نتائج الفحص: {findings}"
     )
@@ -160,8 +212,8 @@ async def create_ai_improvement_plan(
                         {"role": "system", "content": "أنت مراجع برمجيات حذر. لا تخترع نتائج فحص."},
                         {"role": "user", "content": prompt},
                     ],
-                    "max_tokens": 550,
-                    "temperature": 0.1,
+                    "max_tokens": 260,
+                    "temperature": 0.0,
                 },
             )
             response.raise_for_status()
@@ -171,7 +223,7 @@ async def create_ai_improvement_plan(
             if not isinstance(answer, str):
                 return None
             answer = re.sub(r"\s+", " ", answer).strip()
-            return answer[:2600] if len(answer) >= 40 else None
+            return _clean_ai_report(answer, checks, goal)
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         # Never log request headers or credential-bearing URLs.
         return f"تعذر الحصول على تحليل الذكاء الاصطناعي ({type(exc).__name__}). نتائج الفحص المحلي متاحة أعلاه."

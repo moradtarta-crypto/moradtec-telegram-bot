@@ -3,7 +3,7 @@ from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from self_improvement import Check, run_self_check
+from self_improvement import Check, _clean_ai_report, _fallback_ai_report, run_self_check
 
 
 class SelfImprovementTests(unittest.TestCase):
@@ -46,6 +46,26 @@ class SelfImprovementTests(unittest.TestCase):
                 checks = run_self_check(root)
             commands = next(item for item in checks if item.name == "owner_tools_registered")
             self.assertTrue(commands.ok, commands.detail)
+
+    def test_repeated_ai_output_falls_back_to_factual_report(self):
+        checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
+        repeated = "مراجعة عامة لصحة البوت جيدة. " + ("يجب تحسين التحكم في الملكية الخاصة بالملك. " * 5)
+        result = _clean_ai_report(repeated, checks)
+        self.assertIn("جميع الفحوصات اجتازت الاختبار", result)
+        self.assertNotIn("الملكية الخاصة بالملك", result)
+
+    def test_clean_ai_report_removes_duplicate_sentences(self):
+        checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
+        answer = "النتائج كلها جيدة وواضحة. يجب متابعة السجلات بعد النشر. النتائج كلها جيدة وواضحة."
+        result = _clean_ai_report(answer, checks)
+        self.assertEqual(result.count("النتائج كلها جيدة وواضحة"), 1)
+        self.assertLessEqual(len(result), 1100)
+
+    def test_fallback_report_does_not_overclaim(self):
+        checks = [Check("python_syntax", True, "bot.py syntax is valid.", "critical")]
+        result = _fallback_ai_report(checks)
+        self.assertIn("تغطي الفحوصات المحددة فقط", result)
+        self.assertNotIn("آمن تماماً", result)
 
     def test_check_serializes_without_secrets(self):
         item = Check("secret_hygiene", False, "Possible secret; value hidden.", "critical")
