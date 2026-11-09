@@ -19,7 +19,7 @@ class GroundedToolExplanationTests(unittest.TestCase):
         self.assertIn("Image to Video", explanation)
         self.assertIn("تعديل فيديو موجود", explanation)
         self.assertIn("تنبيه خصوصية", explanation)
-        self.assertNotIn("مجاني", explanation)
+        self.assertIn("لم أستنتج أن الخدمة مجانية", explanation)
 
     def test_does_not_invent_features_when_source_is_vague(self):
         explanation = build_grounded_explanation({
