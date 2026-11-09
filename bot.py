@@ -8,6 +8,7 @@ import ipaddress
 from html.parser import HTMLParser
 from xml.etree import ElementTree
 from io import BytesIO
+from pathlib import Path
 
 import httpx
 from urllib.parse import parse_qs, quote, unquote, urlsplit
