@@ -26,7 +26,7 @@ class SelfImprovementTests(unittest.TestCase):
     def test_detects_registered_command_handlers_without_ast_error(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = "\\n".join([
+            source = "\n".join([
                 "from telegram.ext import CommandHandler",
                 "app.add_handler(CommandHandler('start', start))",
                 "app.add_handler(CommandHandler('help', help_command))",
