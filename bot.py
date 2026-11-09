@@ -542,7 +542,7 @@ async def autodev_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     status = await update.message.reply_text("🧠 أُنشئ مقترحاً برمجياً وأفحصه، ثم سأرفعه إلى GitHub كطلب مراجعة مسودة...")
     try:
         proposal = await create_code_proposal(goal)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         await status.edit_text(f"تعذر إنشاء طلب التطوير: {exc}")
         return
     except Exception as exc:
