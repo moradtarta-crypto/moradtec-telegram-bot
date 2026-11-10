@@ -40,8 +40,10 @@ class ShrtFlyTests(unittest.IsolatedAsyncioTestCase):
     async def test_returns_none_without_api_token_without_calling_api(self):
         with patch.dict(os.environ, {"SHRTFLY_API_TOKEN": ""}):
             with patch("shrtfly.httpx.AsyncClient") as client:
-                result = await shorten_with_shrtfly("https://deepai.org/video")
+                with self.assertLogs("moradtec-bot.shrtfly", level="INFO") as captured:
+                    result = await shorten_with_shrtfly("https://deepai.org/video")
         self.assertIsNone(result)
+        self.assertIn("token is not configured", " ".join(captured.output))
         client.assert_not_called()
 
     async def test_sends_expected_parameters_and_returns_short_url(self):
