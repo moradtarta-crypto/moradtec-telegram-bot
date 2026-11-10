@@ -82,7 +82,7 @@ OFFICIAL_TOOL_CATALOG = (
             "chatgpt", "chat gpt", "شات جي بي تي", "ai language learning",
             "language learning", "language practice", "تعلم اللغات بالذكاء الاصطناعي",
         ),
-        "description": "ChatGPT can support language practice through conversation, vocabulary explanations, and learning exercises.",
+        "description": "ChatGPT can support language learning and practice through conversation, vocabulary explanations, and learning exercises.",
         "content": (
             "ChatGPT is an AI assistant that can support language learning when prompted to practice "
             "conversations, explain vocabulary or grammar, translate examples, and create learning "
