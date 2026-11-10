@@ -1,38 +1,28 @@
-name: MoradTec scheduled channel publishing
+name: MoradTec hourly image publishing
 
 on:
   schedule:
-    # Algeria is UTC+1: 10:00, 15:00, and 20:00 local time.
-    - cron: "0 9 * * *"
-    - cron: "0 14 * * *"
-    - cron: "0 19 * * *"
+    # GitHub cron is UTC; Algeria is UTC+1, so this runs at minute 00 every local hour.
+    - cron: "0 * * * *"
   workflow_dispatch:
-    inputs:
-      slot:
-        description: "Which daily publishing slot to run"
-        required: true
-        type: choice
-        options:
-          - morning
-          - afternoon
-          - evening
 
 permissions:
   contents: read
 
 concurrency:
-  group: moradtec-scheduled-publisher-${{ github.event.schedule || inputs.slot }}
+  group: moradtec-hourly-publisher-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     env:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       SHRTFLY_API_TOKEN: ${{ secrets.SHRTFLY_API_TOKEN }}
       CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
-      POST_SLOT: ${{ inputs.slot || (github.event.schedule == '0 9 * * *' && 'morning') || (github.event.schedule == '0 14 * * *' && 'afternoon') || (github.event.schedule == '0 19 * * *' && 'evening') }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -48,6 +38,5 @@ jobs:
         run: |
           test -n "$BOT_TOKEN" || (echo "::error::Add BOT_TOKEN to repository Actions secrets" && exit 1)
           test -n "$SHRTFLY_API_TOKEN" || (echo "::error::Add SHRTFLY_API_TOKEN to repository Actions secrets" && exit 1)
-          test -n "$POST_SLOT" || (echo "::error::Could not determine publishing slot" && exit 1)
-      - name: Publish one monetized post
+      - name: Publish one monetized image post
         run: python scheduled_publish.py
