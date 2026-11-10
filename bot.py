@@ -17,6 +17,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from self_improvement import create_ai_improvement_plan, run_self_check
 from self_developer import create_code_proposal
 from tool_search import canonical_tool_url, deduplicate_tool_results, is_relevant_tool
+from tool_catalog import catalog_tools_for_query
 from tool_explainer import build_grounded_explanation, hide_direct_links
 from shrtfly import shorten_with_shrtfly
 from tool_post import build_tool_post
@@ -239,8 +240,8 @@ async def search_ai_tool_sites(query: str):
 
         if not search_results:
             if last_error:
-                raise last_error
-            return []
+                logger.info("Using curated official tool catalog after search providers returned no results")
+            return catalog_tools_for_query(query)
 
         for item in search_results:
             candidate_url = _clean_search_url(item.get("href"))
@@ -291,7 +292,11 @@ async def search_ai_tool_sites(query: str):
                 logger.warning("Could not inspect a search result: %s", type(exc).__name__)
                 continue
 
-    return deduplicate_tool_results(found)
+    # Curated official entries keep common tasks usable when external search is
+    # blocked or returns only directories/editorial pages. Search results remain
+    # preferred; catalog entries are deduplicated against them.
+    catalog = catalog_tools_for_query(query)
+    return deduplicate_tool_results(found + catalog)
 
 
 async def explain_ai_tool(tool: dict):
