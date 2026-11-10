@@ -1,4 +1,4 @@
-"""Publish one verified, monetized AI-tool post for a scheduled GitHub Actions slot."""
+"""Publish one verified, monetized AI-tool post with a topic-matched image."""
 from __future__ import annotations
 
 import asyncio
@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from telegram import Bot
@@ -13,25 +14,100 @@ from telegram import Bot
 from shrtfly import shorten_with_shrtfly
 from tool_catalog import catalog_tools_for_query
 from tool_explainer import build_grounded_explanation, hide_direct_links
-from tool_post import build_tool_post
 
 logger = logging.getLogger("moradtec-scheduled-publisher")
 ALGIERS = ZoneInfo("Africa/Algiers")
-SLOTS = ("morning", "afternoon", "evening")
-TOOL_ROTATION = ("DeepAI", "Canva AI", "DeepL", "Adobe Firefly", "ElevenLabs", "ChatGPT")
+TOOL_ROTATION = (
+    "AI video generation",
+    "AI translation tools",
+    "AI graphic design",
+    "AI voice generation",
+    "AI writing assistants",
+    "AI chat assistants",
+    "AI image generation",
+    "AI coding assistants",
+    "AI music generation",
+    "AI presentation makers",
+    "AI photo editing",
+    "AI transcription tools",
+    "AI research assistants",
+    "AI website builders",
+    "AI logo makers",
+    "AI background removers",
+    "AI data analysis",
+    "AI meeting assistants",
+    "AI automation tools",
+    "AI language learning",
+    "AI document summarizers",
+    "AI 3D generation",
+    "AI chatbot builders",
+    "AI video editing",
+)
 
 
-def select_daily_tool(now: datetime, slot: str) -> str:
-    """Rotate the curated tool list by local date and daily slot."""
-    if slot not in SLOTS:
-        raise ValueError(f"Unsupported slot: {slot}")
+def select_hourly_topic(now: datetime) -> str:
+    """Select a deterministic, rotating topic for each Algiers-local hour."""
     local_now = now.astimezone(ALGIERS)
-    day_index = local_now.date().toordinal()
-    slot_index = SLOTS.index(slot)
-    return TOOL_ROTATION[(day_index * len(SLOTS) + slot_index) % len(TOOL_ROTATION)]
+    hour_index = local_now.date().toordinal() * 24 + local_now.hour
+    return TOOL_ROTATION[hour_index % len(TOOL_ROTATION)]
 
 
-async def publish_one(slot: str) -> bool:
+def build_photo_caption(
+    tool: dict,
+    explanation: str,
+    short_url: str,
+    shortened: bool,
+    attribution: str = "",
+) -> str:
+    """Build a Telegram photo caption within Telegram's 1024-character limit."""
+    title = str(tool.get("title") or "أداة ذكاء اصطناعي").strip()[:120]
+    summary = str(tool.get("description") or "اكتشف الأداة من موقعها الرسمي.").strip()[:190]
+    guide = " ".join(str(explanation or "").split())[:260]
+    parts = [
+        f"🧰 {title}",
+        "",
+        "🔎 ماذا تقدم؟",
+        summary,
+        "",
+        "💡 كيف تستفيد منها؟",
+        guide or "افتح الأداة وجرّب الوظائف المتاحة بحسب احتياجك.",
+        "",
+        f"🌐 جرّب الأداة: {short_url}",
+        "",
+        "ℹ️ قد يمر الرابط المختصر بصفحة إعلانية قبل الموقع الرسمي."
+        if shortened else "ℹ️ رابط الموقع الرسمي.",
+    ]
+    if attribution:
+        parts.extend(["", attribution[:180]])
+    caption = "\n".join(parts)
+    if len(caption) > 1024:
+        excess = len(caption) - 1024
+        parts[6] = parts[6][:max(40, len(parts[6]) - excess - 5)] + "…"
+        caption = "\n".join(parts)
+    return caption[:1024]
+
+
+async def find_topic_image(topic: str):
+    """Prefer a custom AI image, then use a relevant freely licensed Commons photo."""
+    from bot import generate_ai_photo, find_commons_photo
+
+    generated = await generate_ai_photo(
+        f"{topic}; professional technology editorial photograph"
+    )
+    if generated:
+        return {"kind": "generated", **generated}
+
+    photo = await find_commons_photo(topic)
+    if photo:
+        attribution = (
+            f"📷 الصورة: Wikimedia Commons | المؤلف: {photo['artist']} | "
+            f"الترخيص: {photo['license']}\nالمصدر: {photo['page']}"
+        )
+        return {"kind": "commons", **photo, "attribution": attribution}
+    return None
+
+
+async def publish_one() -> bool:
     token = os.environ.get("BOT_TOKEN", "").strip()
     channel_id = os.environ.get("CHANNEL_ID", "").strip() or "@MoradTecAI"
     if not token:
@@ -39,14 +115,16 @@ async def publish_one(slot: str) -> bool:
     if not os.environ.get("SHRTFLY_API_TOKEN", "").strip():
         raise RuntimeError("SHRTFLY_API_TOKEN secret is missing; refusing to publish an unmonetized post")
 
-    # Import the webhook bot's search helpers only at runtime, after secrets are checked.
     from bot import explain_ai_tool, search_ai_tool_sites
 
     now = datetime.now(ALGIERS)
-    query = select_daily_tool(now, slot)
-    logger.info("Preparing scheduled %s post for curated topic %s", slot, query)
+    query = select_hourly_topic(now)
+    logger.info(
+        "Preparing hourly post for Algiers local hour %s; topic=%s",
+        now.strftime("%Y-%m-%d %H:00"),
+        query,
+    )
 
-    # Prefer the exact first-party catalog entry for predictable daily publishing.
     candidates = catalog_tools_for_query(query)
     if not candidates:
         candidates = await search_ai_tool_sites(query)
@@ -60,8 +138,8 @@ async def publish_one(slot: str) -> bool:
         explanation = await explain_ai_tool(tool)
     if not explanation:
         explanation = (
-            "تعرّف على الأداة من موقعها الرسمي، وراجع صفحة المساعدة لمعرفة الوظائف "
-            "والخطوات المتاحة حاليًا. لم تتوفر معلومات كافية لتأكيد خطوات أكثر تفصيلًا."
+            "افتح الموقع الرسمي وراجع صفحة المساعدة لمعرفة الوظائف والخطوات المتاحة حاليًا. "
+            "تحقق من الأسعار والميزات قبل الاستخدام."
         )
 
     short_url = await shorten_with_shrtfly(tool["url"])
@@ -69,23 +147,42 @@ async def publish_one(slot: str) -> bool:
         logger.error("ShrtFly did not return a confirmed short link; skipping publication")
         return False
 
-    post = build_tool_post(
+    image = await find_topic_image(f"{tool.get('title', query)} {query}")
+    if not image:
+        logger.error("No suitable topic image found; skipping publication to preserve image-post quality")
+        return False
+
+    attribution = image.get("attribution", "")
+    caption = build_photo_caption(
         tool,
         hide_direct_links(explanation),
         short_url,
         shortened=True,
+        attribution=attribution,
     )
+
     async with Bot(token=token) as telegram_bot:
-        message = await telegram_bot.send_message(
-            chat_id=channel_id,
-            text=post,
-            disable_web_page_preview=False,
-        )
+        if image["kind"] == "generated":
+            extension = "png" if image["content_type"] == "image/png" else "jpg"
+            image_file = BytesIO(image["bytes"])
+            image_file.name = f"moradtec-hourly-{now.strftime('%Y%m%d-%H')}.{extension}"
+            message = await telegram_bot.send_photo(
+                chat_id=channel_id,
+                photo=image_file,
+                caption=caption,
+            )
+        else:
+            message = await telegram_bot.send_photo(
+                chat_id=channel_id,
+                photo=image["url"],
+                caption=caption,
+            )
+
     logger.info(
-        "Published scheduled post: slot=%s channel=%s message_id=%s tool_host=%s",
-        slot,
+        "Published hourly image post: channel=%s message_id=%s image_source=%s tool_host=%s",
         channel_id,
         message.message_id,
+        image["kind"],
         __import__("urllib.parse", fromlist=["urlsplit"]).urlsplit(tool["url"]).hostname,
     )
     return True
@@ -96,14 +193,10 @@ def main() -> int:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
-    slot = os.environ.get("POST_SLOT", "").strip()
-    if slot not in SLOTS:
-        logger.error("POST_SLOT must be one of: %s", ", ".join(SLOTS))
-        return 2
     try:
-        published = asyncio.run(publish_one(slot))
+        published = asyncio.run(publish_one())
     except Exception:
-        logger.exception("Scheduled publishing failed")
+        logger.exception("Hourly scheduled publishing failed")
         return 1
     return 0 if published else 1
 
