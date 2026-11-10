@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from scheduled_publish import (
     TOOL_ROTATION,
+    build_ffmpeg_command,
     build_photo_caption,
     select_hourly_topic,
 )
@@ -24,6 +25,14 @@ class ScheduledPublishingTests(unittest.TestCase):
         local_time = datetime(2026, 11, 10, 15, 0, tzinfo=ZoneInfo("Africa/Algiers"))
         utc_time = local_time.astimezone(ZoneInfo("UTC"))
         self.assertEqual(select_hourly_topic(local_time), select_hourly_topic(utc_time))
+
+    def test_ffmpeg_command_builds_six_second_h264_mp4(self):
+        command = build_ffmpeg_command("/tmp/source.jpg", "/tmp/output.mp4")
+        self.assertEqual(command[0], "ffmpeg")
+        self.assertIn("libx264", command)
+        self.assertIn("1280x720", " ".join(command))
+        self.assertEqual(command[command.index("-t") + 1], "6")
+        self.assertEqual(command[-1], "/tmp/output.mp4")
 
     def test_photo_caption_stays_within_telegram_limit(self):
         tool = {
