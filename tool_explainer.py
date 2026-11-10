@@ -65,6 +65,20 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     ):
         return _deepl_translation_explanation(tool)
 
+    # WaveSpeed Make a Photo Talk: use only capabilities stated in the
+    # curated official-page record; do not invent UI labels or extra motion.
+    if host in {"wavespeed.ai", "www.wavespeed.ai"} and any(
+        term in task for term in ("wavespeed", "make a photo talk", "talking photo", "صورة تتكلم", "تحريك صورة")
+    ):
+        return "\\n".join([
+            f"ما الأداة؟ {title or 'WaveSpeed AI – Make a Photo Talk'} أداة تعمل من المتصفح لتحريك صورة شخصية ثابتة باستخدام ملف صوتي ترفعه معها.",
+            "ماذا تقدم؟ بحسب وصف الصفحة الرسمية، تحرّك حركة الفم لتتزامن مع الصوت، وتُخرج النتيجة بصيغة MP4. لا يعني ذلك أنها تحرّك الجسم أو الرأس بالكامل.",
+            "طريقة الاستخدام: افتح صفحة الأداة، جهّز صورة واضحة وملفاً صوتياً مناسباً، ثم أدخلهما في الأداة واتبع خيارات الرفع والمعالجة الظاهرة على الصفحة. لم يحدد النص المفحوص أسماء الأزرار، لذلك لن أخمّنها.",
+            "مثال عملي: أضف تسجيلاً قصيراً بصوتك إلى صورة شخصية لإنشاء مقطع تبدو فيه الشخصية وكأنها تتحدث.",
+            "الحدود التي تذكرها الصفحة: صور JPG وPNG وWebP وAVIF وHEIC حتى 30 ميغابايت، وملفات صوت أو فيديو حتى 30 ثانية، مع إخراج MP4. وتذكر الصفحة أن المعالجة محلية في المتصفح وأن الاستخدام لا يتطلب تسجيل دخول أو يضيف علامة مائية؛ تحقق من الصفحة قبل الاعتماد على هذه التفاصيل لأنها قد تتغير.",
+            "السعر: لم أتحقق من معلومات سعرية مستقلة؛ راجع الصفحة الرسمية قبل الاستخدام.",
+        ])[:1700]
+
     # DeepAI's homepage can be discovered without the detailed video documentation.
     # This fallback is deliberately limited to its official domain and video-related tasks.
     if host in {"deepai.org", "www.deepai.org", "deep.ai", "www.deep.ai"} and any(
