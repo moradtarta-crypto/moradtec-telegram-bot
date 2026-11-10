@@ -866,7 +866,11 @@ async def find_commons_photo(topic: str):
         queries.extend(["cybersecurity computer security", "computer security laptop technology"])
     elif any(word in normalized for word in ("هاتف", "تطبيق", "أندرويد", "اندرويد", "آيفون", "ايفون")):
         queries.extend(["smartphone mobile phone technology", "person using smartphone"])
-    headers = {"User-Agent": "MoradTecTelegramBot/1.2 (Wikimedia Commons image search)"}
+    headers = {
+        "User-Agent": "MoradTecTelegramBot/1.3 (https://github.com/moradtarta-crypto/moradtec-telegram-bot; Wikimedia Commons image search)",
+        "Api-User-Agent": "MoradTecTelegramBot/1.3 (https://github.com/moradtarta-crypto/moradtec-telegram-bot; Wikimedia Commons image search)",
+        "Accept": "application/json",
+    }
 
     async with httpx.AsyncClient(timeout=18.0, follow_redirects=True) as client:
         for search_query in queries:
@@ -922,7 +926,11 @@ async def find_commons_photo(topic: str):
                         "title": title,
                     }
             except httpx.HTTPStatusError as exc:
-                logger.warning("Commons API returned HTTP %s during image lookup", exc.response.status_code)
+                logger.warning(
+                    "Commons API returned HTTP %s during image lookup; response=%s",
+                    exc.response.status_code,
+                    exc.response.text[:240].replace("\\n", " "),
+                )
             except httpx.RequestError as exc:
                 logger.warning("Commons network error during image lookup: %s", type(exc).__name__)
             except (ValueError, KeyError, TypeError):
