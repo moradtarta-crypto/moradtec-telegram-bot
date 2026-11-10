@@ -30,7 +30,11 @@ async def shorten_with_shrtfly(url: str) -> str | None:
     """Create a monetized link; return None safely when unconfigured or unavailable."""
     token = os.getenv("SHRTFLY_API_TOKEN", "").strip()
     destination = (url or "").strip()
-    if not token or not _is_safe_destination(destination):
+    if not token:
+        logger.info("ShrtFly API token is not configured; using the official destination URL")
+        return None
+    if not _is_safe_destination(destination):
+        logger.warning("ShrtFly rejected an unsafe destination URL")
         return None
 
     params = {
@@ -56,6 +60,10 @@ async def shorten_with_shrtfly(url: str) -> str | None:
         if parsed.scheme != "https" or parsed.hostname not in {"shrtfly.com", "www.shrtfly.com", "shrtslug.biz"}:
             logger.warning("ShrtFly API returned an unexpected short-link host")
             return None
+        logger.info(
+            "ShrtFly link created successfully for destination host %s",
+            urlsplit(destination).hostname,
+        )
         return short_url
     except httpx.HTTPStatusError as exc:
         logger.warning("ShrtFly API returned HTTP %s", exc.response.status_code)
