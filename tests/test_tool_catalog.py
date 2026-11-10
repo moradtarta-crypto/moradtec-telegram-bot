@@ -23,7 +23,7 @@ class ToolCatalogTests(unittest.TestCase):
     def test_translation_task_returns_deepl_not_video_tool(self):
         tools = catalog_tools_for_query("ترجمة النصوص")
         self.assertEqual([item["url"] for item in tools], [
-            "https://www.deepl.com/en/translator"
+            "https://deepl.com/en/translator"
         ])
         self.assertEqual(tools[0]["title"], "DeepL Translator")
 
