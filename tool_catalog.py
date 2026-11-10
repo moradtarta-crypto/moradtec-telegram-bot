@@ -64,6 +64,18 @@ OFFICIAL_TOOL_CATALOG = (
         ),
     },
     {
+        "title": "Zapier AI Workflows",
+        "url": "https://zapier.com/automations",
+        "aliases": ("zapier", "zapier ai", "ai automation", "ai automation tools", "أتمتة الذكاء الاصطناعي"),
+        "description": "Zapier connects apps and automates workflows, including AI-powered steps and agents.",
+        "content": (
+            "Zapier Workflows connect apps through triggers and actions. AI features can help build "
+            "workflows, summarize and classify information, and route tasks across connected apps. "
+            "Available features and task limits depend on the plan; check Zapier's official pages "
+            "for current availability and pricing."
+        ),
+    },
+    {
         "title": "ChatGPT",
         "url": "https://chatgpt.com/",
         "aliases": ("chatgpt", "chat gpt", "شات جي بي تي"),
