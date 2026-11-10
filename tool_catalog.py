@@ -4,41 +4,74 @@ from __future__ import annotations
 from tool_search import canonical_tool_url, is_relevant_tool, normalize_search_text
 
 
-# Keep entries limited to official product pages whose purpose and capabilities
-# have been checked. Add new entries only with a first-party source URL.
+# Keep entries limited to first-party product pages. Descriptions state only
+# broadly documented capabilities; users should verify current plan limits.
 OFFICIAL_TOOL_CATALOG = (
     {
         "title": "DeepAI AI Video Generator",
         "url": "https://deepai.org/video",
         "aliases": ("deepai", "deep ai", "ديب اي", "ديب اي اي"),
-        "description": (
-            "Official DeepAI video generator. Create videos from text prompts "
-            "or images, use reference-to-video, edit clips, and extend videos."
-        ),
+        "description": "Official DeepAI video generator for creating and editing AI videos.",
         "content": (
-            "AI Video Generator. Text-to-video: describe a scene and turn words "
-            "into a video. Image-to-video: start with a still image and describe "
-            "subject or camera movement. Reference-to-video uses reference images. "
-            "Video Edit changes elements in an uploaded clip. Video Extend continues "
-            "an existing clip. Video generation is part of DeepAI Pro; check the "
-            "official page and documentation for current allowances and pricing. "
-            "The official documentation warns uploaded images and videos may be "
-            "shared publicly."
+            "AI Video Generator. Text-to-video turns a written scene description into a video. "
+            "Image-to-video starts from a still image. Video Edit changes elements in an uploaded "
+            "clip, and Video Extend continues an existing clip. Check the official page for current "
+            "availability, plan limits, pricing, and privacy terms."
         ),
     },
     {
         "title": "DeepL Translator",
         "url": "https://www.deepl.com/en/translator",
         "aliases": ("deepl", "deep l", "ديب ال", "ديبل"),
-        "description": (
-            "Official DeepL translation tool for translating text and documents "
-            "between supported languages."
-        ),
+        "description": "Official DeepL translation tool for text and supported documents.",
         "content": (
-            "DeepL Translator supports text translation and document translation. "
-            "The official help center also lists image translation, desktop and "
-            "mobile apps, browser extensions, and API access. Available languages "
-            "and plan limits can vary; check the official translator and help pages."
+            "DeepL Translator supports text translation and document translation between supported "
+            "languages. Available languages, file types, and plan limits can vary; check the official "
+            "translator and help pages for current details."
+        ),
+    },
+    {
+        "title": "Canva AI",
+        "url": "https://www.canva.com/ai/",
+        "aliases": ("canva ai", "canva", "كانفا"),
+        "description": "Canva AI brings AI-assisted design and content creation features into Canva.",
+        "content": (
+            "Canva AI provides AI-assisted design and content creation features within Canva. "
+            "Available tools and usage limits depend on product availability and plan. Check the "
+            "official Canva AI page for the current feature set and terms."
+        ),
+    },
+    {
+        "title": "Adobe Firefly",
+        "url": "https://firefly.adobe.com/",
+        "aliases": ("adobe firefly", "firefly", "فايرفلاي"),
+        "description": "Adobe Firefly is Adobe's generative AI creative tool for images and other media.",
+        "content": (
+            "Adobe Firefly is a generative AI creative tool. The Firefly web app provides generation "
+            "and editing workflows for supported creative media. Features, generative credits, and "
+            "commercial-use terms vary; consult Adobe's official product and terms pages."
+        ),
+    },
+    {
+        "title": "ElevenLabs",
+        "url": "https://elevenlabs.io/",
+        "aliases": ("elevenlabs", "eleven labs", "إليفن لابس"),
+        "description": "ElevenLabs offers AI audio tools including text-to-speech and voice generation.",
+        "content": (
+            "ElevenLabs provides AI audio tools, including text-to-speech and voice generation. "
+            "Voice cloning and other features may require consent and are subject to platform rules. "
+            "Check the official site for supported languages, usage limits, and pricing."
+        ),
+    },
+    {
+        "title": "ChatGPT",
+        "url": "https://chatgpt.com/",
+        "aliases": ("chatgpt", "chat gpt", "شات جي بي تي"),
+        "description": "ChatGPT is an AI assistant for writing, learning, analysis, and other tasks.",
+        "content": (
+            "ChatGPT is an AI assistant that can help with writing, learning, brainstorming, and "
+            "analysis. Capabilities and usage limits vary by plan and may change. Check the official "
+            "site for current features and terms."
         ),
     },
 )
@@ -53,8 +86,6 @@ def catalog_tools_for_query(query: str) -> list[dict]:
         if not url:
             continue
 
-        # A direct brand lookup should return that brand's own official product
-        # page even when the user enters only the brand name (e.g. /tools DeepAI).
         aliases = tuple(normalize_search_text(alias) for alias in entry.get("aliases", ()))
         direct_brand_match = any(
             normalized_query == alias or normalized_query.startswith(alias + " ")
