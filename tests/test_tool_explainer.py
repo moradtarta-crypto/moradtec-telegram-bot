@@ -33,6 +33,20 @@ class GroundedToolExplanationTests(unittest.TestCase):
         self.assertIn("افتح الأداة من الرابط المختصر الموجود أسفل الشرح.", cleaned)
         self.assertNotIn("افتح صفحة مولّد الفيديو الرسمية:", cleaned)
 
+    def test_deepl_translation_has_clear_non_repetitive_arabic_steps(self):
+        explanation = build_grounded_explanation({
+            "title": "DeepL Translator",
+            "description": "Translate text and documents between supported languages.",
+            "content": "DeepL Translator supports text translation and document translation.",
+            "url": "https://www.deepl.com/en/translator",
+        }, "ترجمة النصوص")
+        self.assertIn("ترجمة النصوص المكتوبة", explanation)
+        self.assertIn("الصق النص", explanation)
+        self.assertIn("مثال عملي", explanation)
+        self.assertNotIn("هذا شرح عن الأداة", explanation)
+        self.assertNotIn("DeepL Translator هي أداة ترجمة نصوص وتقارير", explanation)
+        self.assertNotIn("السعر:", explanation)
+
     def test_does_not_invent_features_when_source_is_vague(self):
         explanation = build_grounded_explanation({
             "title": "Example AI",
