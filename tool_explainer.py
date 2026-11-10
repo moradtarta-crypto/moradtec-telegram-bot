@@ -30,6 +30,25 @@ def _deepai_video_explanation(tool: dict) -> str:
     ])[:2200]
 
 
+
+def _deepl_translation_explanation(tool: dict) -> str:
+    """Provide a concise Arabic guide for DeepL using verified product facts."""
+    title = str(tool.get("title") or "DeepL Translator")
+    return "\\n".join([
+        f"ما الأداة؟ {title} خدمة ترجمة من DeepL تساعدك على ترجمة النصوص والمستندات إلى لغات مدعومة.",
+        "ما الذي تستطيع فعله؟",
+        "• ترجمة النصوص المكتوبة بين اللغات المتاحة.",
+        "• ترجمة المستندات مع الحفاظ على تنسيقها قدر الإمكان، بحسب نوع الملف والخطة المتاحة.",
+        "طريقة الاستخدام:",
+        "1. افتح صفحة DeepL Translator.",
+        "2. اختر لغة النص الأصلي واللغة التي تريد الترجمة إليها، أو استخدم اكتشاف اللغة إذا كان متاحاً.",
+        "3. الصق النص في مربع الإدخال، وستظهر الترجمة في الجهة المقابلة.",
+        "4. راجع الترجمة والأسماء والمصطلحات قبل استخدامها في مستند رسمي أو منشور مهم.",
+        "مثال عملي: اكتب فقرة تعريفية بالعربية، واختر الإنجليزية لغةً للترجمة، ثم راجع الصياغة الناتجة قبل نشرها.",
+        "اللغات والحدود والميزات المتاحة تختلف حسب نوع الحساب والمنطقة؛ راجع الموقع الرسمي لمعرفة التفاصيل الحالية. لم أذكر سعراً غير متحقق منه.",
+    ])[:1700]
+
+
 def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     """Build a concise Arabic guide only from explicit source facts."""
     title = str(tool.get("title", ""))
@@ -40,6 +59,11 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     normalized = re.sub(r"\s+", " ", source).casefold()
     host = (urlsplit(url).hostname or "").lower()
     task = (query or "").casefold()
+
+    if host in {"deepl.com", "www.deepl.com"} and any(
+        term in task for term in ("ترجمة", "translation", "translate", "translator")
+    ):
+        return _deepl_translation_explanation(tool)
 
     # DeepAI's homepage can be discovered without the detailed video documentation.
     # This fallback is deliberately limited to its official domain and video-related tasks.
