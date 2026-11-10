@@ -31,6 +31,11 @@ class ToolCatalogTests(unittest.TestCase):
         tools = catalog_tools_for_query("تصميم الأزياء")
         self.assertNotIn("https://deepai.org/video", [item["url"] for item in tools])
 
+    def test_ai_language_learning_uses_chatgpt_practice_fallback(self):
+        tools = catalog_tools_for_query("AI language learning")
+        self.assertEqual([item["url"] for item in tools], ["https://chatgpt.com/"])
+        self.assertIn("language learning", tools[0]["description"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()
