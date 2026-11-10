@@ -70,7 +70,7 @@ def build_grounded_explanation(tool: dict, query: str = "") -> str | None:
     if host in {"wavespeed.ai", "www.wavespeed.ai"} and any(
         term in task for term in ("wavespeed", "make a photo talk", "talking photo", "صورة تتكلم", "تحريك صورة")
     ):
-        return "\\n".join([
+        return "\n".join([
             f"ما الأداة؟ {title or 'WaveSpeed AI – Make a Photo Talk'} أداة تعمل من المتصفح لتحريك صورة شخصية ثابتة باستخدام ملف صوتي ترفعه معها.",
             "ماذا تقدم؟ بحسب وصف الصفحة الرسمية، تحرّك حركة الفم لتتزامن مع الصوت، وتُخرج النتيجة بصيغة MP4. لا يعني ذلك أنها تحرّك الجسم أو الرأس بالكامل.",
             "طريقة الاستخدام: افتح صفحة الأداة، جهّز صورة واضحة وملفاً صوتياً مناسباً، ثم أدخلهما في الأداة واتبع خيارات الرفع والمعالجة الظاهرة على الصفحة. لم يحدد النص المفحوص أسماء الأزرار، لذلك لن أخمّنها.",
