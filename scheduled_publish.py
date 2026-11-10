@@ -61,8 +61,8 @@ def build_photo_caption(
 ) -> str:
     """Build a Telegram photo caption within Telegram's 1024-character limit."""
     title = str(tool.get("title") or "أداة ذكاء اصطناعي").strip()[:120]
-    summary = str(tool.get("description") or "اكتشف الأداة من موقعها الرسمي.").strip()[:190]
-    guide = " ".join(str(explanation or "").split())[:260]
+    summary = str(tool.get("description") or "اكتشف الأداة من موقعها الرسمي.").strip()[:130]
+    guide = " ".join(str(explanation or "").split())[:120]
     parts = [
         f"🧰 {title}",
         "",
@@ -78,7 +78,7 @@ def build_photo_caption(
         if shortened else "ℹ️ رابط الموقع الرسمي.",
     ]
     if attribution:
-        parts.extend(["", attribution[:180]])
+        parts.extend(["", attribution[:350]])
     caption = "\n".join(parts)
     if len(caption) > 1024:
         excess = len(caption) - 1024
@@ -100,8 +100,9 @@ async def find_topic_image(topic: str):
     photo = await find_commons_photo(topic)
     if photo:
         attribution = (
-            f"📷 الصورة: Wikimedia Commons | المؤلف: {photo['artist']} | "
-            f"الترخيص: {photo['license']}\nالمصدر: {photo['page']}"
+            f"📷 Wikimedia Commons | المؤلف: {photo['artist'][:90]} | "
+            f"الترخيص: {photo['license'][:60]}\nالمصدر: {photo['page'][:120]}"
+            + (f"\nرابط الترخيص: {photo['license_url'][:100]}" if photo.get("license_url") else "")
         )
         return {"kind": "commons", **photo, "attribution": attribution}
     return None
