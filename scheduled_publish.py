@@ -33,7 +33,7 @@ def select_daily_tool(now: datetime, slot: str) -> str:
 
 async def publish_one(slot: str) -> bool:
     token = os.environ.get("BOT_TOKEN", "").strip()
-    channel_id = os.environ.get("CHANNEL_ID", "@MoradTecAI").strip()
+    channel_id = os.environ.get("CHANNEL_ID", "").strip() or "@MoradTecAI"
     if not token:
         raise RuntimeError("BOT_TOKEN secret is missing")
     if not os.environ.get("SHRTFLY_API_TOKEN", "").strip():
