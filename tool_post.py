@@ -4,7 +4,7 @@
 MAX_LENGTH = 3400
 
 
-def build_tool_post(tool: dict, explanation: str, destination_url: str) -> str:
+def build_tool_post(tool: dict, explanation: str, destination_url: str, shortened: bool = False) -> str:
     """Build a transparent Arabic promo post without claiming unverified features."""
     title = str(tool.get("title") or "أداة ذكاء اصطناعي").strip()[:160]
     summary = str(tool.get("description") or "").strip()
@@ -22,7 +22,7 @@ def build_tool_post(tool: dict, explanation: str, destination_url: str) -> str:
         "",
         f"🌐 جرّب الأداة: {destination_url}",
         "",
-        "ℹ️ قد يمر الرابط المختصر بصفحة إعلانية قبل الوصول إلى الموقع الرسمي. تحقق من الأسعار والميزات وسياسة الخصوصية في موقع الأداة قبل الاستخدام.",
+        ("ℹ️ قد يمر الرابط المختصر بصفحة إعلانية قبل الوصول إلى الموقع الرسمي. " if shortened else "ℹ️ هذا رابط مباشر للموقع الرسمي. ") + "تحقق من الأسعار والميزات وسياسة الخصوصية في موقع الأداة قبل الاستخدام.",
         "",
         "#MoradTec #ذكاء_اصطناعي #أدوات_رقمية",
     ]
