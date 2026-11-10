@@ -19,6 +19,7 @@ from self_developer import create_code_proposal
 from tool_search import canonical_tool_url, deduplicate_tool_results, is_relevant_tool
 from tool_explainer import build_grounded_explanation, hide_direct_links
 from shrtfly import shorten_with_shrtfly
+from tool_post import build_tool_post
 
 from telegram.ext import (
     Application,
@@ -372,6 +373,57 @@ async def explain_ai_tool(tool: dict):
     return None
 
 
+async def toolpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prepare a reviewable AI-tool channel post; never publish it automatically."""
+    if not is_owner(update):
+        await update.message.reply_text("هذا الأمر متاح لمالك البوت فقط.")
+        return
+    query = " ".join(context.args).strip()
+    if len(query) < 2:
+        await update.message.reply_text("اكتب المهمة، مثلاً: /toolpost إنشاء فيديو بالذكاء الاصطناعي")
+        return
+    if len(query) > 100:
+        await update.message.reply_text("اجعل عبارة البحث أقل من 100 حرف.")
+        return
+    status = await update.message.reply_text(
+        f"🔎 أبحث عن أداة مناسبة لـ: {query}\n"
+        "سأجهز منشوراً للمراجعة فقط، ولن أنشره في القناة."
+    )
+    try:
+        tools = await search_ai_tool_sites(query)
+    except httpx.HTTPError as exc:
+        logger.warning("AI tool post search failed: %s", type(exc).__name__)
+        await status.edit_text("تعذر الوصول إلى خدمة البحث حالياً. حاول مرة أخرى لاحقاً.")
+        return
+    if not tools:
+        await status.edit_text("لم أعثر على أداة بصفحة رسمية يمكن التحقق منها. لم يتم إعداد منشور.")
+        return
+    await status.edit_text(f"✅ عثرت على {len(tools)} أداة. أجهز مسودة للمراجعة...")
+    for index, tool in enumerate(tools, start=1):
+        explanation = build_grounded_explanation(tool, query)
+        if not explanation:
+            explanation = await explain_ai_tool(tool)
+        if not explanation:
+            explanation = (
+                "لم تتضمن الصفحة المفحوصة تفاصيل كافية لشرح موثوق. "
+                "افتح الموقع الرسمي وراجع قسم المساعدة أو الوثائق؛ لن أخمّن الوظائف أو الخطوات."
+            )
+        shortened_url = await shorten_with_shrtfly(tool["url"])
+        destination_url = shortened_url or tool["url"]
+        display_explanation = hide_direct_links(explanation) if shortened_url else explanation
+        post_text = build_tool_post(tool, display_explanation, destination_url, shortened=bool(shortened_url))
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🌐 معاينة الأداة", url=destination_url)]]
+        )
+        await update.effective_message.reply_text(
+            f"📝 مسودة {index} — للمراجعة فقط، لم تُنشر في القناة.\n\n"
+            f"{post_text}\n\n"
+            "إذا وافقت على النص، انسخه وأرسله باستخدام /post للنشر بعد مراجعتك.",
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
+        )
+
+
 async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Discover AI tools by task, verify their official pages, and explain usage."""
     if not is_owner(update):
@@ -615,7 +667,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحباً بك في مساعد MoradTec 🤖\n\n"
         "أرسل /id لمعرفة رقم حسابك Telegram.\n"
-        "استخدم /ideas لاقتراح مواضيع، و/draft الموضوع لإنشاء مسودة، أو /post لنشر محتوى ترسله بنفسك.\n"
+        "استخدم /ideas لاقتراح مواضيع، و/draft لإنشاء مسودة، و/toolpost لإعداد منشور أداة للمراجعة.\n"
         "استخدم /selfcheck لفحص البوت و/improve الهدف للحصول على خطة تطوير ذكية.\n"
         "استخدم /post لإرسال منشور نصي أو صورة مع تعليق، "
         "وسيُنشر تلقائياً بعد استلامه."
@@ -637,6 +689,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/draft الموضوع - إنشاء مسودة تقنية قابلة للتعديل (لا تُنشر تلقائياً)\n"
         "/ideas - اقتراح أفكار منشورات تقنية\n"
         "/tools المجال - البحث عن أدوات ذكاء اصطناعي وشرح استخدامها مع روابطها الرسمية\n"
+        "/toolpost المهمة - إعداد منشور أداة مع رابط مختصر للمراجعة فقط (لا ينشر تلقائياً)\n"
         "/selfcheck - فحص صحة البوت وتحليل نتائجه\n"
         "/improve الهدف - إعداد خطة تحسين بالذكاء الاصطناعي\n"
         "/autodev الهدف - إنشاء مقترح كود وفتح طلب مراجعة مسودة على GitHub\n"
@@ -1105,6 +1158,7 @@ def main() -> None:
     app.add_handler(CommandHandler("selfcheck", selfcheck_command))
     app.add_handler(CommandHandler("improve", improve_command))
     app.add_handler(CommandHandler("autodev", autodev_command))
+    app.add_handler(CommandHandler("toolpost", toolpost_command))
     app.add_handler(CommandHandler("tools", tools_command))
     app.add_handler(CommandHandler("tool", tools_command))
     app.add_handler(CommandHandler("post", post_command))
