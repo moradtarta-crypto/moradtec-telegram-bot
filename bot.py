@@ -408,13 +408,20 @@ async def toolpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         explanation = build_grounded_explanation(tool, query)
         if not explanation:
             explanation = await explain_ai_tool(tool)
-        if not explanation:
-            explanation = (
-                "لم تتضمن الصفحة المفحوصة تفاصيل كافية لشرح موثوق. "
-                "افتح الموقع الرسمي وراجع قسم المساعدة أو الوثائق؛ لن أخمّن الوظائف أو الخطوات."
+        if not explanation or len(explanation.strip()) < 100 or "لم تتضمن الصفحة" in explanation:
+            await update.effective_message.reply_text(
+                "⚠️ لم أتمكن من إعداد شرح موثوق لهذه الأداة من مصدرها الرسمي. "
+                "لن أجهز منشوراً يعتمد على الرابط وحده. جرّب أداة أخرى أو أرسل رابطها الرسمي مباشرة للمراجعة."
             )
+            continue
         shortened_url = await shorten_with_shrtfly(tool["url"])
-        destination_url = shortened_url or tool["url"]
+        if not shortened_url or shortened_url == tool["url"]:
+            await update.effective_message.reply_text(
+                "⚠️ تعذر اختصار رابط الأداة عبر ShrtFly. لم أُنشئ مسودة للنشر، "
+                "ولن أستبدل الرابط المختصر بالرابط الأصلي تلقائياً."
+            )
+            continue
+        destination_url = shortened_url
         display_explanation = hide_direct_links(explanation) if shortened_url else explanation
         post_text = build_tool_post(tool, display_explanation, destination_url, shortened=bool(shortened_url))
         keyboard = InlineKeyboardMarkup(
@@ -1146,6 +1153,14 @@ async def receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
         if not content:
             await message.reply_text("النص فارغ. أرسل نص المنشور من فضلك.")
+            return
+        # Prevent accidental publication of a bare URL without an explanation.
+        if re.fullmatch(r"https?://\\S+", content.strip(), flags=re.I):
+            await message.reply_text(
+                "⚠️ لم أنشر الرابط لأنه وصل منفرداً دون شرح. "
+                "أرسل منشوراً يتضمن اسم الأداة ووظيفتها وطريقة استخدامها، "
+                "مع رابط مختصر تم التحقق منه، أو أرسل /cancel لإلغاء العملية."
+            )
             return
         if len(content) > MAX_POST_LENGTH:
             await message.reply_text(
