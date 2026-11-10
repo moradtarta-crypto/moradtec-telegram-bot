@@ -8,6 +8,23 @@ from tool_search import canonical_tool_url, is_relevant_tool, normalize_search_t
 # broadly documented capabilities; users should verify current plan limits.
 OFFICIAL_TOOL_CATALOG = (
     {
+        "title": "WaveSpeed AI – Make a Photo Talk",
+        "url": "https://wavespeed.ai/free-tools/make-photo-talk",
+        "aliases": (
+            "wavespeed", "wavespeed ai", "make a photo talk",
+            "talking photo", "تحريك صورة تتكلم", "صورة تتكلم",
+        ),
+        "description": "WaveSpeed AI Make a Photo Talk animates a still portrait using an uploaded audio track.",
+        "content": (
+            "Make a Photo Talk is a browser-based tool for animating a still portrait with an audio "
+            "track. The official page describes support for JPG, PNG, WebP, AVIF and HEIC images up "
+            "to 30 MB, and audio or video inputs up to 30 seconds, with MP4 output. The page states "
+            "that processing happens locally in the browser and advertises use without sign-up or "
+            "a watermark. The core effect is lip movement synced to the supplied audio; do not promise "
+            "full-body or natural head movement. Check the official page for current limits and terms."
+        ),
+    },
+    {
         "title": "DeepAI AI Video Generator",
         "url": "https://deepai.org/video",
         "aliases": ("deepai", "deep ai", "ديب اي", "ديب اي اي"),
