@@ -78,11 +78,16 @@ OFFICIAL_TOOL_CATALOG = (
     {
         "title": "ChatGPT",
         "url": "https://chatgpt.com/",
-        "aliases": ("chatgpt", "chat gpt", "شات جي بي تي"),
-        "description": "ChatGPT is an AI assistant for writing, learning, analysis, and other tasks.",
+        "aliases": (
+            "chatgpt", "chat gpt", "شات جي بي تي", "ai language learning",
+            "language learning", "language practice", "تعلم اللغات بالذكاء الاصطناعي",
+        ),
+        "description": "ChatGPT can support language practice through conversation, vocabulary explanations, and learning exercises.",
         "content": (
-            "ChatGPT is an AI assistant that can help with writing, learning, brainstorming, and "
-            "analysis. Capabilities and usage limits vary by plan and may change. Check the official "
+            "ChatGPT is an AI assistant that can support language learning when prompted to practice "
+            "conversations, explain vocabulary or grammar, translate examples, and create learning "
+            "exercises. Learners should verify important translations and corrections. Available "
+            "features, voice access, and usage limits vary by plan and may change; check the official "
             "site for current features and terms."
         ),
     },
