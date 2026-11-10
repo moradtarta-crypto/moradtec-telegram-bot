@@ -10,7 +10,6 @@ from zoneinfo import ZoneInfo
 
 from telegram import Bot
 
-from bot import explain_ai_tool, search_ai_tool_sites
 from shrtfly import shorten_with_shrtfly
 from tool_catalog import catalog_tools_for_query
 from tool_explainer import build_grounded_explanation, hide_direct_links
@@ -39,6 +38,9 @@ async def publish_one(slot: str) -> bool:
         raise RuntimeError("BOT_TOKEN secret is missing")
     if not os.environ.get("SHRTFLY_API_TOKEN", "").strip():
         raise RuntimeError("SHRTFLY_API_TOKEN secret is missing; refusing to publish an unmonetized post")
+
+    # Import the webhook bot's search helpers only at runtime, after secrets are checked.
+    from bot import explain_ai_tool, search_ai_tool_sites
 
     now = datetime.now(ALGIERS)
     query = select_daily_tool(now, slot)
