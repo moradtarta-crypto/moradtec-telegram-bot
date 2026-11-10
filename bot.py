@@ -411,7 +411,7 @@ async def toolpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         shortened_url = await shorten_with_shrtfly(tool["url"])
         destination_url = shortened_url or tool["url"]
         display_explanation = hide_direct_links(explanation) if shortened_url else explanation
-        post_text = build_tool_post(tool, display_explanation, destination_url)
+        post_text = build_tool_post(tool, display_explanation, destination_url, shortened=bool(shortened_url))
         keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🌐 معاينة الأداة", url=destination_url)]]
         )
