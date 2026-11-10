@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 import sys
+import tempfile
+from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 from zoneinfo import ZoneInfo
@@ -88,14 +91,8 @@ def build_photo_caption(
 
 
 async def find_topic_image(topic: str):
-    """Prefer a custom AI image, then use a relevant freely licensed Commons photo."""
-    from bot import generate_ai_photo, find_commons_photo
-
-    generated = await generate_ai_photo(
-        f"{topic}; professional technology editorial photograph"
-    )
-    if generated:
-        return {"kind": "generated", **generated}
+    """Use a freely licensed Wikimedia Commons photo; avoid paid image-generation APIs."""
+    from bot import find_commons_photo
 
     photo = await find_commons_photo(topic)
     if photo:
@@ -106,6 +103,60 @@ async def find_topic_image(topic: str):
         )
         return {"kind": "commons", **photo, "attribution": attribution}
     return None
+
+
+def build_ffmpeg_command(input_path: str, output_path: str) -> list[str]:
+    """Build a short, silent MP4 with a gentle Ken Burns zoom using local FFmpeg."""
+    video_filter = (
+        "scale=1280:720:force_original_aspect_ratio=decrease,"
+        "pad=1280:720:(ow-iw)/2:(oh-ih)/2,"
+        "zoompan=z='min(zoom+0.0008,1.12)':d=150:"
+        "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+        "s=1280x720:fps=25,format=yuv420p"
+    )
+    return [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-loop", "1", "-i", input_path,
+        "-vf", video_filter, "-t", "6", "-an",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+        "-movflags", "+faststart", output_path,
+    ]
+
+
+async def create_free_video(image: dict, timestamp: str) -> BytesIO | None:
+    """Turn the selected photo into a six-second MP4 without any paid video API."""
+    try:
+        if image.get("kind") == "generated":
+            image_bytes = image["bytes"]
+            suffix = ".png" if image.get("content_type") == "image/png" else ".jpg"
+        else:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(image["url"])
+                response.raise_for_status()
+                image_bytes = response.content
+            suffix = ".jpg"
+
+        with tempfile.TemporaryDirectory(prefix="moradtec-video-") as temp_dir:
+            input_path = Path(temp_dir) / f"source{suffix}"
+            output_path = Path(temp_dir) / "moradtec-post.mp4"
+            input_path.write_bytes(image_bytes)
+            subprocess.run(
+                build_ffmpeg_command(str(input_path), str(output_path)),
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
+            video_bytes = output_path.read_bytes()
+            if not video_bytes:
+                raise RuntimeError("FFmpeg produced an empty video")
+        video = BytesIO(video_bytes)
+        video.name = f"moradtec-{timestamp}.mp4"
+        return video
+    except Exception as exc:
+        logger.warning("Free FFmpeg video creation failed; will use the source photo: %s", type(exc).__name__)
+        return None
 
 
 async def publish_one() -> bool:
@@ -162,27 +213,44 @@ async def publish_one() -> bool:
         attribution=attribution,
     )
 
+    video = await create_free_video(image, now.strftime("%Y%m%d-%H"))
     async with Bot(token=token) as telegram_bot:
-        if image["kind"] == "generated":
-            extension = "png" if image["content_type"] == "image/png" else "jpg"
-            image_file = BytesIO(image["bytes"])
-            image_file.name = f"moradtec-hourly-{now.strftime('%Y%m%d-%H')}.{extension}"
-            message = await telegram_bot.send_photo(
-                chat_id=channel_id,
-                photo=image_file,
-                caption=caption,
-            )
-        else:
-            message = await telegram_bot.send_photo(
-                chat_id=channel_id,
-                photo=image["url"],
-                caption=caption,
-            )
+        if video is not None:
+            try:
+                message = await telegram_bot.send_video(
+                    chat_id=channel_id,
+                    video=video,
+                    caption=caption,
+                    supports_streaming=True,
+                )
+                media_kind = "free_ffmpeg_video"
+            except Exception:
+                logger.exception("Telegram video upload failed; falling back to the source photo")
+                video = None
+
+        if video is None:
+            if image["kind"] == "generated":
+                extension = "png" if image["content_type"] == "image/png" else "jpg"
+                image_file = BytesIO(image["bytes"])
+                image_file.name = f"moradtec-hourly-{now.strftime('%Y%m%d-%H')}.{extension}"
+                message = await telegram_bot.send_photo(
+                    chat_id=channel_id,
+                    photo=image_file,
+                    caption=caption,
+                )
+            else:
+                message = await telegram_bot.send_photo(
+                    chat_id=channel_id,
+                    photo=image["url"],
+                    caption=caption,
+                )
+            media_kind = "photo_fallback"
 
     logger.info(
-        "Published hourly image post: channel=%s message_id=%s image_source=%s tool_host=%s",
+        "Published hourly post: channel=%s message_id=%s media=%s image_source=%s tool_host=%s",
         channel_id,
         message.message_id,
+        media_kind,
         image["kind"],
         __import__("urllib.parse", fromlist=["urlsplit"]).urlsplit(tool["url"]).hostname,
     )
