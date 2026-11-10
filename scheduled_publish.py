@@ -132,11 +132,31 @@ async def create_free_video(image: dict, timestamp: str) -> BytesIO | None:
         else:
             import httpx
 
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.get(image["url"])
-                response.raise_for_status()
+            download_headers = {
+                "User-Agent": "MoradTecTelegramBot/1.4 (https://github.com/moradtarta-crypto/moradtec-telegram-bot; freely licensed media downloader)",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": image.get("page", "https://commons.wikimedia.org/"),
+            }
+            async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers=download_headers) as client:
+                response = None
+                for attempt in range(3):
+                    response = await client.get(image["url"])
+                    if response.status_code not in (429, 500, 502, 503, 504) or attempt == 2:
+                        break
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError:
+                    logger.warning(
+                        "Commons image download failed: HTTP %s host=%s content_type=%s response=%s",
+                        response.status_code,
+                        response.url.host,
+                        response.headers.get("content-type", "unknown"),
+                        response.text[:180].replace("\\n", " ") if "text" in response.headers.get("content-type", "") else "<binary response>",
+                    )
+                    raise
                 image_bytes = response.content
-            suffix = ".jpg"
+            suffix = ".png" if image.get("url", "").lower().split("?")[0].endswith(".png") else ".jpg"
 
         with tempfile.TemporaryDirectory(prefix="moradtec-video-") as temp_dir:
             input_path = Path(temp_dir) / f"source{suffix}"
