@@ -17,6 +17,7 @@ from telegram import Bot
 from shrtfly import shorten_with_shrtfly
 from tool_catalog import catalog_tools_for_query
 from tool_explainer import build_grounded_explanation, hide_direct_links
+from image_relevance import commons_image_matches_topic
 
 logger = logging.getLogger("moradtec-scheduled-publisher")
 ALGIERS = ZoneInfo("Africa/Algiers")
@@ -64,8 +65,8 @@ def build_photo_caption(
 ) -> str:
     """Build a Telegram photo caption within Telegram's 1024-character limit."""
     title = str(tool.get("title") or "أداة ذكاء اصطناعي").strip()[:120]
-    summary = str(tool.get("description") or "اكتشف الأداة من موقعها الرسمي.").strip()[:130]
-    guide = " ".join(str(explanation or "").split())[:120]
+    summary = str(tool.get("description") or "اكتشف الأداة من موقعها الرسمي.").strip()[:210]
+    guide = " ".join(str(explanation or "").split())[:380]
     parts = [
         f"🧰 {title}",
         "",
@@ -81,7 +82,7 @@ def build_photo_caption(
         if shortened else "ℹ️ رابط الموقع الرسمي.",
     ]
     if attribution:
-        parts.extend(["", attribution[:350]])
+        parts.extend(["", attribution[:220]])
     caption = "\n".join(parts)
     if len(caption) > 1024:
         excess = len(caption) - 1024
@@ -95,6 +96,9 @@ async def find_topic_image(topic: str):
     from bot import find_commons_photo
 
     photo = await find_commons_photo(topic)
+    if photo and not commons_image_matches_topic(topic, photo.get("title", "")):
+        logger.warning("Commons image rejected because its title is not sufficiently related to topic=%s image=%s", topic, photo.get("title", ""))
+        return None
     if photo:
         attribution = (
             f"📷 Wikimedia Commons | المؤلف: {photo['artist'][:90]} | "
@@ -211,11 +215,9 @@ async def publish_one() -> bool | None:
     explanation = build_grounded_explanation(tool, query)
     if not explanation:
         explanation = await explain_ai_tool(tool)
-    if not explanation:
-        explanation = (
-            "افتح الموقع الرسمي وراجع صفحة المساعدة لمعرفة الوظائف والخطوات المتاحة حاليًا. "
-            "تحقق من الأسعار والميزات قبل الاستخدام."
-        )
+    if not explanation or len(explanation.strip()) < 100:
+        logger.warning("No sufficiently detailed source-grounded explanation for %s; safely skipping this hour", tool.get("title", query))
+        return None
 
     short_url = await shorten_with_shrtfly(tool["url"])
     if not short_url:
