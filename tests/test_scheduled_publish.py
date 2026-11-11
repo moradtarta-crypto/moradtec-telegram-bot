@@ -2,7 +2,9 @@ import unittest
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from image_relevance import commons_image_matches_topic\n\nfrom scheduled_publish import (
+from image_relevance import commons_image_matches_topic
+
+from scheduled_publish import (
     TOOL_ROTATION,
     build_ffmpeg_command,
     build_photo_caption,
@@ -40,7 +42,27 @@ class ScheduledPublishingTests(unittest.TestCase):
         self.assertEqual(command[command.index("-t") + 1], "6")
         self.assertEqual(command[-1], "/tmp/output.mp4")
 
-    def test_commons_image_requires_multiple_meaningful_topic_matches(self):\n        self.assertFalse(commons_image_matches_topic(\n            "ChatGPT AI language learning",\n            "Knowles Assumptions about Adult Learning.png",\n        ))\n        self.assertTrue(commons_image_matches_topic(\n            "AI language learning",\n            "Language Learning with Artificial Intelligence.jpg",\n        ))\n\n    def test_photo_caption_keeps_a_useful_explanation(self):\n        tool = {"title": "ChatGPT", "description": "An AI assistant for conversation and learning."}\n        caption = build_photo_caption(\n            tool,\n            "يمكنك التدرب على المحادثة وطلب شرح المفردات والقواعد وإنشاء تمارين لغوية.",\n            "https://shrtfly.com/example",\n            shortened=True,\n        )\n        self.assertIn("التدرب على المحادثة", caption)\n\n    def test_photo_caption_stays_within_telegram_limit(self):
+    def test_commons_image_requires_multiple_meaningful_topic_matches(self):
+        self.assertFalse(commons_image_matches_topic(
+            "ChatGPT AI language learning",
+            "Knowles Assumptions about Adult Learning.png",
+        ))
+        self.assertTrue(commons_image_matches_topic(
+            "AI language learning",
+            "Language Learning with Artificial Intelligence.jpg",
+        ))
+
+    def test_photo_caption_keeps_a_useful_explanation(self):
+        tool = {"title": "ChatGPT", "description": "An AI assistant for conversation and learning."}
+        caption = build_photo_caption(
+            tool,
+            "يمكنك التدرب على المحادثة وطلب شرح المفردات والقواعد وإنشاء تمارين لغوية.",
+            "https://shrtfly.com/example",
+            shortened=True,
+        )
+        self.assertIn("التدرب على المحادثة", caption)
+
+    def test_photo_caption_stays_within_telegram_limit(self):
         tool = {
             "title": "Example AI Tool",
             "description": "A useful AI tool for creative work.",
