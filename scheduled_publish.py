@@ -82,7 +82,7 @@ def build_photo_caption(
         if shortened else "ℹ️ رابط الموقع الرسمي.",
     ]
     if attribution:
-        parts.extend(["", attribution[:350]])
+        parts.extend(["", attribution[:220]])
     caption = "\n".join(parts)
     if len(caption) > 1024:
         excess = len(caption) - 1024
