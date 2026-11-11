@@ -7,10 +7,16 @@ from scheduled_publish import (
     build_ffmpeg_command,
     build_photo_caption,
     select_hourly_topic,
+    exit_code_for_outcome,
 )
 
 
 class ScheduledPublishingTests(unittest.TestCase):
+    def test_safe_skip_is_successful_but_real_failure_is_not(self):
+        self.assertEqual(exit_code_for_outcome(None), 0)
+        self.assertEqual(exit_code_for_outcome(True), 0)
+        self.assertEqual(exit_code_for_outcome(False), 1)
+
     def test_rotation_covers_all_24_local_hours_without_repeating(self):
         start = datetime(2026, 11, 10, 0, 0, tzinfo=ZoneInfo("Africa/Algiers"))
         selected = [

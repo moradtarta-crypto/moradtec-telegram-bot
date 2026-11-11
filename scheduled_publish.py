@@ -179,7 +179,7 @@ async def create_free_video(image: dict, timestamp: str) -> BytesIO | None:
         return None
 
 
-async def publish_one() -> bool:
+async def publish_one() -> bool | None:
     token = os.environ.get("BOT_TOKEN", "").strip()
     channel_id = os.environ.get("CHANNEL_ID", "").strip() or "@MoradTecAI"
     if not token:
@@ -201,8 +201,11 @@ async def publish_one() -> bool:
     if not candidates:
         candidates = await search_ai_tool_sites(query)
     if not candidates:
-        logger.error("No verified official tool page found; nothing was published")
-        return False
+        logger.warning(
+            "No verified official tool page found for topic=%s; safely skipping this hour",
+            query,
+        )
+        return None
     tool = candidates[0]
 
     explanation = build_grounded_explanation(tool, query)
@@ -216,13 +219,16 @@ async def publish_one() -> bool:
 
     short_url = await shorten_with_shrtfly(tool["url"])
     if not short_url:
-        logger.error("ShrtFly did not return a confirmed short link; skipping publication")
-        return False
+        logger.warning("ShrtFly did not return a confirmed short link; safely skipping publication")
+        return None
 
     image = await find_topic_image(f"{tool.get('title', query)} {query}")
     if not image:
-        logger.error("No suitable topic image found; skipping publication to preserve image-post quality")
-        return False
+        logger.warning(
+            "No suitable topic image found for %s; safely skipping publication",
+            tool.get("title", query),
+        )
+        return None
 
     attribution = image.get("attribution", "")
     caption = build_photo_caption(
@@ -277,6 +283,11 @@ async def publish_one() -> bool:
     return True
 
 
+def exit_code_for_outcome(published: bool | None) -> int:
+    """Treat deliberate safety skips as successful workflow runs, not crashes."""
+    return 0 if published is not False else 1
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -287,7 +298,9 @@ def main() -> int:
     except Exception:
         logger.exception("Hourly scheduled publishing failed")
         return 1
-    return 0 if published else 1
+    if published is None:
+        logger.info("Hourly run completed safely without publishing")
+    return exit_code_for_outcome(published)
 
 
 if __name__ == "__main__":
